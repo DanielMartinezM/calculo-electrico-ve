@@ -318,10 +318,10 @@ function renderPotencia(){
 }
 
 /* =====================================================
-   MICRO-APP 2: SELECCIÓN DE CONDUCTORES (CEN / NTF 200)
-   Tabla 310-16 (0–2000 V, ≤3 conductores portadores, 30 °C),
+   MICRO-APP 2: SELECCIÓN DE CONDUCTORES (CEN, FONDONORMA 200:2004)
+   Tabla 310.16 (0–2000 V, ≤3 conductores portadores, 30 °C),
    factores de temperatura y agrupamiento, 125 % cargas continuas,
-   terminales 110-14(C), protección 240.4/240.6, tierra 250-122,
+   terminales 110.14(C), protección 240.4/240.6, tierra 250.122,
    caída de tensión con R y X (Tabla 9, canalización PVC).
    ===================================================== */
 const CAL = ["14","12","10","8","6","4","3","2","1","1/0","2/0","3/0","4/0","250","300","350","400","500","600","750","1000"];
@@ -335,12 +335,12 @@ const AMP_AL = [null,[20,20,25],[25,30,35],[30,40,45],[40,50,60],[55,65,75],[65,
   [260,310,350],[285,340,385],[320,385,435],[375,445,500]];
 // Resistencia y reactancia (Ω/km), canalización PVC
 const R_CU = [10.2,6.6,3.9,2.56,1.61,1.02,0.82,0.62,0.49,0.39,0.33,0.253,0.203,0.171,0.144,0.125,0.108,0.089,0.075,0.062,0.049];
-const R_AL = [null,10.5,6.6,4.3,2.66,1.67,1.35,1.05,0.82,0.69,0.52,0.43,0.33,0.282,0.236,0.202,0.177,0.141,0.118,0.095,0.075];
+const R_AL = [null,10.5,6.6,4.3,2.66,1.67,1.31,1.05,0.82,0.66,0.52,0.43,0.33,0.279,0.233,0.200,0.177,0.141,0.118,0.095,0.075];
 const XL   = [0.190,0.177,0.164,0.171,0.167,0.157,0.154,0.148,0.151,0.144,0.141,0.138,0.135,0.135,0.135,0.131,0.131,0.128,0.128,0.125,0.121];
 // Límite de protección para conductores pequeños (240.4(D))
 const CAP_CU = {"14":15,"12":20,"10":30}, CAP_AL = {"12":15,"10":25};
 const OCPD = [15,20,25,30,35,40,45,50,60,70,80,90,100,110,125,150,175,200,225,250,300,350,400,450,500,600,700,800,1000,1200,1600,2000];
-// Tierra de equipos, cobre (Tabla 250-122): [máx. protección, calibre]
+// Tierra de equipos, cobre (Tabla 250.122): [máx. protección, calibre]
 const TIERRA_CU = [[15,"14"],[20,"12"],[60,"10"],[100,"8"],[200,"6"],[300,"4"],[400,"3"],[500,"2"],[600,"1"],[800,"1/0"],[1000,"2/0"],[1200,"3/0"],[1600,"4/0"],[2000,"250"]];
 const IDX_1_0 = CAL.indexOf("1/0");
 const calLabel = i => CAL[i] + (i>=CAL.indexOf("250") ? " kcmil" : " AWG");
@@ -386,7 +386,7 @@ function seleccionarConductor(p){
   for(let n=1; n<=(p.allowPar?6:1); n++){
     let iAmp=-1, iDrop=-1, hit=null;
     for(let i=p.minIdx; i<CAL.length; i++){
-      if(n>1 && i<IDX_1_0) continue;                 // paralelo solo desde 1/0 (310-4)
+      if(n>1 && i<IDX_1_0) continue;                 // paralelo solo desde 1/0 (310.4)
       const e = evalSize(i,n); if(!e) continue;
       if(iAmp<0 && e.ampOk) iAmp = i;
       if(iDrop<0 && e.dropOk) iDrop = i;
@@ -450,7 +450,7 @@ function renderConductor(){
     <label><input type="checkbox" id="nolin" style="width:auto"> Cargas no lineales (el neutro cuenta como conductor portador)</label>
     <label><input type="checkbox" id="par" style="width:auto" checked> Permitir conductores en paralelo (desde 1/0)</label>
     <button class="go" id="calc">Seleccionar conductor</button>
-    <p class="small">Tabla 310-16 (hasta 3 conductores portadores en canalización, base 30 °C). En clima cálido (techos, exteriores) use 35–40 °C. Cada juego en paralelo se asume en su propia canalización.</p>
+    <p class="small">Tabla 310.16 (hasta 3 conductores portadores en canalización, base 30 °C). En clima cálido (techos, exteriores) use 35–40 °C. Cada juego en paralelo se asume en su propia canalización.</p>
   </div>
   <div id="res"></div>`;
 
@@ -560,18 +560,18 @@ function renderConductor(){
         <tr><td>Calibre mínimo por ampacidad / por caída</td><td>${r.iAmp>=0?calLabel(r.iAmp):"—"} / ${r.iDrop>=0?calLabel(r.iDrop):"—"}</td></tr>
       </table>
       ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
-      <p class="small">Criterios: ampacidad sin corregir ≥ corriente de diseño (110-14(C)) y corregida ≥ carga (310-15); protección ≥ corriente de diseño y ≤ ampacidad (240.4, con límite de conductores pequeños); tierra según 250-122 para la protección elegida (si el fase se aumentó por caída de tensión, aumente la tierra proporcionalmente). No incluye canalización, corto circuito ni cargas especiales. Verifique contra la edición vigente de la NTF 200 y el criterio de un ingeniero colegiado.</p>
+      <p class="small">Criterios: ampacidad sin corregir ≥ corriente de diseño (110.14(C)) y corregida ≥ carga (310.15); protección ≥ corriente de diseño y ≤ ampacidad (240.4, con límite de conductores pequeños); tierra según 250.122 para la protección elegida (si el fase se aumentó por caída de tensión, aumente la tierra proporcionalmente). No incluye canalización, corto circuito ni cargas especiales. Verifique contra la edición vigente de la norma (base: FONDONORMA 200:2004) y el criterio de un ingeniero colegiado.</p>
     </div>`;
     $("res").scrollIntoView({behavior:"smooth"});
   };
 }
 
 /* =====================================================
-   MICRO-APP 3: BREAKER PRINCIPAL DE ACOMETIDA (CEN / NTF 200)
+   MICRO-APP 3: BREAKER PRINCIPAL DE ACOMETIDA (CEN, FONDONORMA 200:2004)
    - Carga: censo (demanda, 125 % continuas, 25 % del motor mayor) o total directo
    - Transformador/banco: corriente nominal secundaria y máximo permitido (450.3(B))
    - Capacidades normalizadas 240.6, mínimo del desconectador 230.79,
-     protección de falla a tierra 230.95, capacidad interruptiva 110-9
+     protección de falla a tierra 230.95, capacidad interruptiva 110.9
    ===================================================== */
 const AIC_KA = [10,14,18,22,25,35,42,50,65,85,100,150,200];
 
@@ -853,7 +853,7 @@ function renderBreaker(){
         <tr><td>Ampacidad mínima de los conductores de acometida</td><td>≥ ${r.rec} A</td></tr>
       </table>
       ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
-      <p class="small">Los conductores de acometida deben tener ampacidad ≥ la capacidad del interruptor (240.4); use la microaplicación «Selección de conductor» con ${f1(Ia!==null?Ia:r.In)} A. La capacidad interruptiva debe ser ≥ la corriente de cortocircuito disponible en el punto de instalación (110-9); la estimada es en bornes del transformador y no incluye la contribución de motores ni la impedancia de la red. Para transformadores de más de 600 V en el primario, la protección primaria (450.3(A)) se calcula aparte. Verifique contra la edición vigente de la NTF 200 y el criterio de un ingeniero colegiado, y la normativa de la empresa distribuidora.</p>
+      <p class="small">Los conductores de acometida deben tener ampacidad ≥ la capacidad del interruptor (240.4); use la microaplicación «Selección de conductor» con ${f1(Ia!==null?Ia:r.In)} A. La capacidad interruptiva debe ser ≥ la corriente de cortocircuito disponible en el punto de instalación (110.9); la estimada es en bornes del transformador y no incluye la contribución de motores ni la impedancia de la red. Para transformadores de más de 600 V en el primario, la protección primaria (450.3(A)) se calcula aparte. Verifique contra la edición vigente de la norma (base: FONDONORMA 200:2004) y el criterio de un ingeniero colegiado, y la normativa de la empresa distribuidora.</p>
     </div>`;
     $("res").scrollIntoView({behavior:"smooth"});
   };
@@ -882,7 +882,7 @@ function dimensionarTransformador(p){
   const Ip = kvaTot*1000/(SQ3*p.Vp), Is = kvaTot*1000/(SQ3*p.Vs);
 
   // Fusible primario (> 1000 V)
-  const maxPct = p.secProt ? 3.0 : 2.5;                  // Tabla 450.3(A): 300 % con protección secundaria; 250 % solo primaria
+  const maxPct = p.secProt ? 3.0 : 2.5;                  // Tabla 450.3(A): fusible 300 % con protección secundaria; 250 % solo primaria (lugar supervisado)
   const fMax = fuseDown(maxPct*Ip);
   let fRec = fuseUp(1.5*Ip);                              // práctica: ≥ 1,5 × In para soportar energización
   const usarInterruptor = fRec===null;
@@ -892,7 +892,7 @@ function dimensionarTransformador(p){
     else if(fRec > fMax) fRec = fMax;
   }
   const cutoutA = (!usarInterruptor && fRec>100) ? 200 : 100;
-  const brkPct = p.secProt ? (p.Z<=6 ? 6.0 : 4.0) : 2.5;  // interruptor MT: 600 % (Z ≤ 6 %), 400 % (6–10 %)
+  const brkPct = p.secProt ? (p.Z<=6 ? 6.0 : 4.0) : 3.0;  // Tabla 450.3(A): interruptor 600 % (Z ≤ 6 %), 400 % (6–10 %); solo primaria (lugar supervisado) 300 %
 
   // Secundario (≤ 1000 V) — 450.3(B)
   const sMin = stdUp(Is);
@@ -1000,7 +1000,7 @@ function renderTransformador(){
     }
     if(r.sMin===null) msgs.push({n:"warn", t:"La corriente secundaria supera los 2.000 A: se requieren varios interruptores (hasta 6 desconectadores, 230.71) o interruptores de potencia. Dimensione con la microaplicación «Breaker principal»."});
     if(Z>10) msgs.push({n:"bad", t:"Z mayor de 10 %: fuera del alcance de la Tabla 450.3(A). Use los valores del fabricante."});
-    if(!secProt) msgs.push({n:"warn", t:"Sin interruptor secundario, el límite baja a 250 % de In y solo es aplicable en ubicación supervisada (personal calificado). Lo usual es instalar interruptor principal en baja tensión."});
+    if(!secProt) msgs.push({n:"warn", t:"Sin interruptor secundario, el límite baja a 250 % de In (fusible) o 300 % (interruptor) y solo es aplicable en ubicación supervisada (personal calificado). Lo usual es instalar interruptor principal en baja tensión."});
 
     // ---------- Medición ----------
     const wires = aterrado ? 3 : 2;
@@ -1077,7 +1077,7 @@ function renderTransformador(){
 
     <div class="card">
       ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
-      <p class="small">Referencias: Tabla 450.3(A) (transformadores &gt; 1000 V: fusible primario ≤ 300 % de In con protección secundaria, ≤ 250 % si solo primaria en ubicación supervisada; interruptor ≤ 600 % con Z ≤ 6 % y ≤ 400 % con Z de 6 a 10 %) y 450.3(B) (secundario ≤ 1000 V). El fusible recomendado (1,5 × In) y los pararrayos, clases de aislamiento, TC y TP son prácticas usuales de distribución y valores normalizados típicos, no requisitos de la norma: los de TC, TP y medidor los define la empresa distribuidora (p. ej. Corpoelec) en sus normas de medición. Esta herramienta no calcula coordinación de protecciones, falla disponible en la red ni capacidad de ruptura de los seccionadores. Valide con la edición vigente de la NTF 200 y un ingeniero colegiado.</p>
+      <p class="small">Referencias: Tabla 450.3(A) (transformadores &gt; 1000 V: fusible primario ≤ 300 % de In con protección secundaria, ≤ 250 % si solo primaria en lugar supervisado; interruptor ≤ 600 % con Z ≤ 6 %, ≤ 400 % con Z de 6 a 10 %, ≤ 300 % si solo primaria en lugar supervisado) y 450.3(B) (secundario ≤ 1000 V). El fusible recomendado (1,5 × In) y los pararrayos, clases de aislamiento, TC y TP son prácticas usuales de distribución y valores normalizados típicos, no requisitos de la norma: los de TC, TP y medidor los define la empresa distribuidora (p. ej. Corpoelec) en sus normas de medición. Esta herramienta no calcula coordinación de protecciones, falla disponible en la red ni capacidad de ruptura de los seccionadores. Valide con la edición vigente de la norma (base: FONDONORMA 200:2004) y un ingeniero colegiado.</p>
     </div>`;
     $("res").scrollIntoView({behavior:"smooth"});
   };
@@ -1089,7 +1089,7 @@ function renderTransformador(){
    R y X de la Tabla 9 (Ω/km), R corregida por temperatura del conductor.
    ===================================================== */
 // Reactancia en canalización de acero (Ω/km), valores típicos
-const XL_ST = [0.240,0.223,0.207,0.213,0.210,0.197,0.194,0.187,0.187,0.180,0.177,0.171,0.167,0.171,0.167,0.164,0.161,0.157,0.157,0.157,0.148];
+const XL_ST = [0.240,0.223,0.207,0.213,0.210,0.197,0.194,0.187,0.187,0.180,0.177,0.171,0.167,0.171,0.167,0.164,0.161,0.157,0.157,0.157,0.151];
 
 /*
   p: sis, V, vll, carga ("ln"|"ll"), I (A por fase), mat, idx (calibre), n (conductores en paralelo por fase),
@@ -1121,7 +1121,7 @@ function calcularCaida(p){
     if(d <= p.vdMax+1e-9){ minIdx = i; break; }
   }
   const tab = p.mat==="cu" ? AMP_CU : AMP_AL;
-  const amp75 = tab[p.idx] ? tab[p.idx][1]*p.n : null;   // ampacidad 75 °C sin factores (310-16)
+  const amp75 = tab[p.idx] ? tab[p.idx][1]*p.n : null;   // ampacidad 75 °C sin factores (310.16)
   return {dv, dvp, Vbase, vload: Vbase-dv, ploss, lmax, minIdx, amp75, R:e.R, X:e.X, Z:e.Z, k,
           total: dvp + (p.up||0)};
 }
@@ -1214,7 +1214,7 @@ function renderCaida(){
     if(!ok && r.minIdx<0) msgs.push({n:"bad", t:"Ningún calibre hasta 1000 kcmil cumple a esa distancia con ese número de conductores: use más conductores en paralelo, suba la tensión o acerque la fuente."});
     if(n>1 && idx<IDX_1_0) msgs.push({n:"warn", t:"Los conductores en paralelo solo se permiten desde 1/0 AWG."});
     if(r.amp75!==null && I>r.amp75) msgs.push({n:"bad", t:`La corriente (${f1(I)} A) supera la ampacidad del conductor a 75 °C (${f1(r.amp75)} A, sin factores de corrección). Verifique con «Selección de conductor».`});
-    else if(r.amp75!==null) msgs.push({n:"ok", t:`Ampacidad del conductor a 75 °C (310-16, sin factores): ${f1(r.amp75)} A frente a ${f1(I)} A de carga. La caída de tensión no sustituye la verificación de ampacidad y protección.`});
+    else if(r.amp75!==null) msgs.push({n:"ok", t:`Ampacidad del conductor a 75 °C (310.16, sin factores): ${f1(r.amp75)} A frente a ${f1(I)} A de carga. La caída de tensión no sustituye la verificación de ampacidad y protección.`});
     if($("canal").value==="acero") msgs.push({n:"warn", t:"Canalización de acero: se usó la reactancia típica; la resistencia a.c. puede ser algo mayor en calibres grandes."});
 
     $("res").innerHTML = `
@@ -1239,7 +1239,7 @@ function renderCaida(){
         <tr><td>Calibre mínimo solo por caída de tensión a ${f1(L)} m (sin ampacidad)</td><td>${r.minIdx>=0 ? (n>1?n+"× ":"")+calLabel(r.minIdx) : "—"}</td></tr>
       </table>
       ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
-      <p class="small">Fórmula: ΔV = k · I · L · (R·cos φ + X·sen φ) / n, con k = 2 en monofásico y bifásico y k = √3 en trifásico, y n conductores en paralelo por fase. Carga equilibrada; el neutro se supone sin caída adicional. Los valores de R y X son los de la Tabla 9 del código (de la familia NEC); verifique con su edición de la NTF 200.</p>
+      <p class="small">Fórmula: ΔV = k · I · L · (R·cos φ + X·sen φ) / n, con k = 2 en monofásico y bifásico y k = √3 en trifásico, y n conductores en paralelo por fase. Carga equilibrada; el neutro se supone sin caída adicional. Los valores de R y X son los de la Tabla 9 del Capítulo 9 de FONDONORMA 200:2004; verifique con la edición vigente de la norma.</p>
     </div>`;
     $("res").scrollIntoView({behavior:"smooth"});
   };
