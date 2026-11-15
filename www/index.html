@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<title>Cálculo Eléctrico VE</title>
+<title>Calculos G.E</title>
 <style>
   :root{
     --bg:#f1f5f9; --card:#ffffff; --txt:#0f172a; --mut:#64748b; --bd:#e2e8f0;
@@ -55,7 +55,7 @@
 <body>
 <header>
   <button id="back" aria-label="Volver">←</button>
-  <h1 id="title">⚡ Cálculo Eléctrico VE</h1>
+  <h1 id="title">⚡ Calculos G.E</h1>
 </header>
 <main id="app"></main>
 
@@ -169,14 +169,13 @@ const back = document.getElementById("back");
 back.onclick = () => home();
 
 function home(){
-  title.textContent = "⚡ Cálculo Eléctrico VE";
+  title.textContent = "⚡ Calculos G.E";
   back.style.display = "none";
   app.innerHTML = MICROAPPS.map(m => `
     <div class="card tile ${m.activa?"":"off"}" data-id="${m.id}">
       <div class="ic">${m.icon}</div>
       <div><h3>${m.nombre}</h3><p>${m.desc}</p></div>
-    </div>`).join("") +
-    `<p class="small">Referencia normativa: Código Eléctrico Nacional (NVC 200:1999, sustituida por la NTF 200:2009 de FONDONORMA). Los umbrales son referenciales y ajustables; valide siempre con la edición vigente de la norma y criterio profesional.</p>`;
+    </div>`).join("");
   app.querySelectorAll(".tile").forEach(el=>{
     const m = MICROAPPS.find(x=>x.id===el.dataset.id);
     if(m.activa) el.onclick = () => { title.textContent = m.icon+" "+m.nombre; back.style.display="block"; m.render(); };

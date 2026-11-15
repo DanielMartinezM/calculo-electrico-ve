@@ -1,4 +1,4 @@
-# Eléctrico VE — proyecto Android (Capacitor)
+# Calculos G.E — proyecto Android (Capacitor)
 
 La app es 100 % local (HTML/JS), funciona sin internet. Todo el código está en `www/index.html`.
 
