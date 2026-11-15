@@ -1,0 +1,7 @@
+{
+  "appId": "ve.calculo.electrico",
+  "appName": "Eléctrico VE",
+  "webDir": "www",
+  "backgroundColor": "#0f172a",
+  "android": { "allowMixedContent": false }
+}

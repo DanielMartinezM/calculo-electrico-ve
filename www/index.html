@@ -1,0 +1,1253 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Cálculo Eléctrico VE</title>
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#ffffff; --txt:#0f172a; --mut:#64748b; --bd:#e2e8f0;
+    --pri:#1d4ed8; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+    --okbg:#dcfce7; --warnbg:#fef3c7; --badbg:#fee2e2;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#0b1220; --card:#131c2e; --txt:#e5e7eb; --mut:#94a3b8; --bd:#243049;
+      --pri:#60a5fa; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+      --okbg:#052e16; --warnbg:#422006; --badbg:#450a0a;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  header{padding:14px 16px;background:#0f172a;color:#fff;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+  header h1{font-size:18px;margin:0;flex:1}
+  header button{background:transparent;border:0;color:#fff;font-size:22px;cursor:pointer;display:none}
+  main{max-width:640px;margin:0 auto;padding:14px 16px 40px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+  .tile{display:flex;gap:12px;align-items:center;cursor:pointer}
+  .tile .ic{font-size:28px}
+  .tile h3{margin:0;font-size:16px}
+  .tile p{margin:2px 0 0;color:var(--mut);font-size:13px}
+  .tile.off{opacity:.5;cursor:default}
+  label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+  input,select{width:100%;padding:12px;font-size:17px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--txt)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  button.go{width:100%;margin-top:16px;padding:14px;font-size:17px;font-weight:600;border:0;border-radius:12px;background:var(--pri);color:#fff;cursor:pointer}
+  .big{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .big div{background:var(--bg);border-radius:12px;padding:12px;text-align:center}
+  .big b{display:block;font-size:24px}
+  .big span{font-size:12px;color:var(--mut)}
+  h2{font-size:15px;margin:0 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td,th{padding:6px 4px;border-bottom:1px solid var(--bd);text-align:left}
+  td:last-child,th:last-child{text-align:right}
+  .tag{display:inline-block;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600}
+  .ok{background:var(--okbg);color:var(--ok)} .warn{background:var(--warnbg);color:var(--warn)} .bad{background:var(--badbg);color:var(--bad)}
+  .msg{padding:10px 12px;border-radius:10px;margin-top:8px;font-size:14px;line-height:1.4}
+  .small{font-size:12px;color:var(--mut);line-height:1.4}
+  .hide{display:none}
+  hr{border:0;border-top:1px solid var(--bd);margin:14px 0 4px}
+</style>
+</head>
+<body>
+<header>
+  <button id="back" aria-label="Volver">←</button>
+  <h1 id="title">⚡ Cálculo Eléctrico VE</h1>
+</header>
+<main id="app"></main>
+
+<script>
+/* =====================================================
+   LÓGICA DE CÁLCULO (pura, reutilizable en otras micro-apps)
+   Sistema venezolano: 120 V monofásico; 120/208 V (estrella) bi y trifásico
+   ===================================================== */
+const SQ3 = Math.sqrt(3);
+const SISTEMAS = {
+  mono: { nombre:"Monofásico (1 fase + neutro) – 120 V", fases:1, neutro:true,
+          etV:"Tensión nominal fase-neutro (V)", vdef:120, nota:"Venezuela: 120 V",
+          vlabels:["Fase-Neutro"] },
+  bi:   { nombre:"Bifásico (2 fases + neutro) – 120/208 V", fases:2, neutro:true,
+          etV:"Tensión nominal fase-neutro (V)", vdef:120, vll:208, nota:"Venezuela: 120 V fase-neutro / 208 V entre fases",
+          vlabels:["L1-N","L2-N","L1-L2"] },
+  tri4: { nombre:"Trifásico 4 hilos (3F + neutro) – 120/208 V", fases:3, neutro:true,
+          etV:"Tensión nominal fase-neutro (V)", vdef:120, vll:208, nota:"Venezuela: 120 V fase-neutro / 208 V entre fases",
+          vlabels:["L1-N","L2-N","L3-N"] },
+  tri3: { nombre:"Trifásico 3 hilos (sin neutro)", fases:3, neutro:false,
+          etV:"Tensión nominal de línea (V)", vdef:208, nota:"Tensión de línea, p. ej. 208 V",
+          vlabels:["L1-L2","L2-L3","L3-L1"] }
+};
+const avg = a => a.reduce((x,y)=>x+y,0)/a.length;
+const maxDev = a => { const m=avg(a); return m>0 ? Math.max(...a.map(x=>Math.abs(x-m)))/m*100 : 0; };
+
+/*
+  Vm  : tensiones medidas (null = no medida → se usa la nominal)
+  carga (solo bifásico): "ln" = cargas a 120 V (fase-neutro) · "ll" = cargas a 208 V (entre fases)
+*/
+function calcularPotencia({sis, V, fp, I, Vm, carga}){
+  const s = SISTEMAS[sis], n = s.fases;
+  const sum = I.reduce((a,b)=>a+b,0), prom = sum/n;
+  let S, vUsed, vll = null, vlist = [];
+
+  if(sis==="tri3"){
+    vUsed = [0,1,2].map(k => Vm[k] ?? V);          // tensiones de línea
+    vll = avg(vUsed); vlist = vUsed;
+    S = vll/SQ3 * sum;                              // = √3·V_LL·I_prom
+  } else if(sis==="bi" && carga==="ll"){
+    vll = Vm[2] ?? s.vll;
+    vUsed = [vll];
+    S = vll * prom;                                 // carga entre fases: S = V_LL · I
+  } else {
+    vUsed = I.map((_,k) => Vm[k] ?? V);             // tensiones fase-neutro
+    vlist = vUsed;
+    S = vUsed.reduce((a,v,k)=>a+v*I[k],0);          // Σ V_fase·I_fase
+    if(sis==="tri4") vll = avg(vUsed)*SQ3;
+    if(sis==="bi")   vll = Vm[2] ?? s.vll;
+  }
+  const P = S*fp, Q = S*Math.sqrt(Math.max(0,1-fp*fp));
+  const desb = I.map(i => prom>0 ? Math.abs(i-prom)/prom*100 : 0);
+  const desbMax = Math.max(...desb);
+  const desbV = vlist.length>1 ? maxDev(vlist) : null;
+  const hayVm = Vm.some(x=>x!==null);
+
+  // Neutro esperado (cargas lineales, fases a 120°)
+  let inCalc = 0;
+  if(s.neutro){
+    if(sis==="mono") inCalc = I[0];
+    else if(sis==="bi") inCalc = carga==="ll" ? 0 : Math.sqrt(Math.max(0, I[0]*I[0] - I[0]*I[1] + I[1]*I[1]));
+    else { const [a,b,c]=I; inCalc = Math.sqrt(Math.max(0,a*a+b*b+c*c-a*b-b*c-c*a)); }
+  }
+  return { S, P, Q, prom, desb, desbMax, desbV, vUsed, vll, inCalc, hayVm };
+}
+
+function diagnosticarNeutro({sis, In, inCalc, prom}){
+  const out = [], s = SISTEMAS[sis];
+  if(In===null || isNaN(In)) return out;
+  const tol = Math.max(0.10*prom, 1);   // tolerancia: 10 % de la corriente media o 1 A
+  const dif = In - inCalc;
+
+  if(!s.neutro){
+    if(In > tol) out.push({n:"bad", t:`Sin neutro pero se mide ${In.toFixed(1)} A: hay corriente de retorno/fuga por tierra o por otro camino. Revisar aislamiento y conexiones a tierra.`});
+    else out.push({n:"ok", t:"Sin corriente anómala de retorno."});
+    return out;
+  }
+  if(dif > tol){
+    const rel = prom>0 ? In/prom : 0;
+    let t = `El neutro medido (${In.toFixed(1)} A) supera al esperado (${inCalc.toFixed(1)} A) en ${dif.toFixed(1)} A. `;
+    if(sis!=="mono" && rel>=1) t += `Neutro ≥ corriente de fase: indicio fuerte de armónicos triples (3.º, 9.º…) por cargas no lineales (fuentes conmutadas, variadores, LED, UPS). `;
+    else t += `Posibles causas: armónicos triples, neutro compartido con otros circuitos o retorno de otra fuente. `;
+    t += `Verificar con pinza True RMS y/o analizador de armónicos; revisar el calibre del neutro.`;
+    out.push({n:"bad", t});
+  } else if(dif < -tol){
+    let t = `El neutro medido (${In.toFixed(1)} A) es menor al esperado (${inCalc.toFixed(1)} A). `;
+    if(sis==="mono") t += `Parte de la corriente de fase no regresa por el neutro: posible fuga a tierra (neutro-tierra puenteado, falla de aislamiento) o retorno por otro conductor. `;
+    else t += `Puede deberse a cargas con distinto factor de potencia entre fases (ángulos ≠ 120°), a una fuga a tierra o a error de medición (¿se midieron las fases a la vez?). `;
+    t += `Repetir la medición simultánea.`;
+    out.push({n:"warn", t});
+  } else {
+    out.push({n:"ok", t:`Neutro medido (${In.toFixed(1)} A) coherente con el esperado (${inCalc.toFixed(1)} A). Sin indicios de armónicos ni fuga relevantes.`});
+  }
+  return out;
+}
+
+/* =====================================================
+   MICRO-APPS (registro) — agregar nuevas aquí
+   ===================================================== */
+const MICROAPPS = [
+  { id:"potencia", icon:"🔌", nombre:"Potencia por pinza", desc:"kW, W, kVA, balance y análisis de neutro", activa:true, render: renderPotencia },
+  { id:"caida",    icon:"📉", nombre:"Caída de tensión",   desc:"Por calibre y distancia: %, pérdidas, longitud máxima", activa:true, render: renderCaida },
+  { id:"conductor",icon:"🧵", nombre:"Selección de conductor", desc:"Calibre, protección, tierra y caída de tensión (CEN)", activa:true, render: renderConductor },
+  { id:"proteccion",icon:"🛡️", nombre:"Breaker principal de acometida", desc:"Por censo de carga, amperaje o transformador/banco (kVA)", activa:true, render: renderBreaker },
+  { id:"transfo",  icon:"🏭", nombre:"Transformadores: protección y medición", desc:"Fusibles en 13,8 / 34,5 kV, protección secundaria, TC y TP", activa:true, render: renderTransformador },
+];
+
+const app = document.getElementById("app");
+const title = document.getElementById("title");
+const back = document.getElementById("back");
+back.onclick = () => home();
+
+function home(){
+  title.textContent = "⚡ Cálculo Eléctrico VE";
+  back.style.display = "none";
+  app.innerHTML = MICROAPPS.map(m => `
+    <div class="card tile ${m.activa?"":"off"}" data-id="${m.id}">
+      <div class="ic">${m.icon}</div>
+      <div><h3>${m.nombre}</h3><p>${m.desc}</p></div>
+    </div>`).join("") +
+    `<p class="small">Referencia normativa: Código Eléctrico Nacional (NVC 200:1999, sustituida por la NTF 200:2009 de FONDONORMA). Los umbrales son referenciales y ajustables; valide siempre con la edición vigente de la norma y criterio profesional.</p>`;
+  app.querySelectorAll(".tile").forEach(el=>{
+    const m = MICROAPPS.find(x=>x.id===el.dataset.id);
+    if(m.activa) el.onclick = () => { title.textContent = m.icon+" "+m.nombre; back.style.display="block"; m.render(); };
+  });
+}
+
+/* =====================================================
+   MICRO-APP 1: POTENCIA POR PINZA
+   ===================================================== */
+const num = v => { const x = parseFloat(String(v).replace(",",".")); return isNaN(x) ? null : x; };
+const f1 = x => x.toLocaleString("es-VE",{minimumFractionDigits:1,maximumFractionDigits:1});
+const f2 = x => x.toLocaleString("es-VE",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function renderPotencia(){
+  app.innerHTML = `
+  <div class="card">
+    <label>Tipo de acometida</label>
+    <select id="sis">${Object.entries(SISTEMAS).map(([k,s])=>`<option value="${k}" ${k==="tri4"?"selected":""}>${s.nombre}</option>`).join("")}</select>
+
+    <div id="wcarga" class="hide">
+      <label>Tipo de carga predominante</label>
+      <select id="carga">
+        <option value="ln">Cargas a 120 V (fase-neutro)</option>
+        <option value="ll">Cargas a 208 V (entre las dos fases)</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div><label id="lblV">Tensión nominal</label><input id="V" inputmode="decimal"></div>
+      <div><label>Factor de potencia (cos φ)</label><input id="fp" inputmode="decimal" value="0,90"></div>
+    </div>
+    <div class="small" id="presets"></div>
+
+    <label>Corrientes medidas con pinza (A)</label>
+    <div class="row3">
+      <div><span class="small" id="l1">L1</span><input id="i1" inputmode="decimal"></div>
+      <div id="w2"><span class="small">L2</span><input id="i2" inputmode="decimal"></div>
+      <div id="w3"><span class="small">L3</span><input id="i3" inputmode="decimal"></div>
+    </div>
+    <div id="wn">
+      <label>Corriente de neutro medida (A) — opcional</label>
+      <input id="in" inputmode="decimal" placeholder="Déjalo vacío si no la mediste">
+    </div>
+
+    <hr>
+    <label>Tensiones medidas (V) — opcional, mejora la precisión</label>
+    <div class="row3">
+      <div id="wv1"><span class="small" id="lv1"></span><input id="v1" inputmode="decimal" placeholder="nominal"></div>
+      <div id="wv2"><span class="small" id="lv2"></span><input id="v2" inputmode="decimal" placeholder="nominal"></div>
+      <div id="wv3"><span class="small" id="lv3"></span><input id="v3" inputmode="decimal" placeholder="nominal"></div>
+    </div>
+    <p class="small">Si dejas una tensión vacía, se usa la nominal.</p>
+
+    <button class="go" id="calc">Calcular</button>
+    <p class="small">Use pinza True RMS y mida las fases en condiciones de carga estable. Si no conoce el factor de potencia, 0,90 es un valor típico; para valores exactos use un analizador de redes.</p>
+  </div>
+  <div id="res"></div>`;
+
+  const $ = id => document.getElementById(id);
+  function ajustar(){
+    const sis = $("sis").value, s = SISTEMAS[sis];
+    $("lblV").textContent = s.etV;
+    $("V").value = s.vdef;
+    $("presets").textContent = s.nota;
+    $("w2").classList.toggle("hide", s.fases<2);
+    $("w3").classList.toggle("hide", s.fases<3);
+    $("wcarga").classList.toggle("hide", sis!=="bi");
+    $("l1").textContent = s.fases===1 ? "Fase" : "L1";
+    s.vlabels.concat(["","",""]).slice(0,3).forEach((t,k)=>{
+      $("lv"+(k+1)).textContent = t;
+      $("wv"+(k+1)).classList.toggle("hide", k>=s.vlabels.length);
+      $("v"+(k+1)).value = "";
+    });
+    $("res").innerHTML = "";
+  }
+  $("sis").onchange = ajustar; ajustar();
+
+  $("calc").onclick = () => {
+    const sis = $("sis").value, s = SISTEMAS[sis];
+    const V = num($("V").value), fp = num($("fp").value);
+    const I = [num($("i1").value), num($("i2").value), num($("i3").value)].slice(0,s.fases);
+    const In = num($("in").value);
+    const Vm = [num($("v1").value), num($("v2").value), num($("v3").value)].slice(0,s.vlabels.length);
+    const carga = sis==="bi" ? $("carga").value : "ln";
+    if(!V || V<=0) return alert("Ingrese una tensión nominal válida.");
+    if(fp===null || fp<=0 || fp>1) return alert("El factor de potencia debe estar entre 0 y 1.");
+    if(I.some(x=>x===null || x<0)) return alert("Ingrese la corriente de todas las fases.");
+    if(Vm.some(x=>x!==null && x<=0)) return alert("Las tensiones medidas deben ser mayores que 0.");
+
+    const r = calcularPotencia({sis, V, fp, I, Vm, carga});
+    const diag = diagnosticarNeutro({sis, In, inCalc:r.inCalc, prom:r.prom});
+
+    const nivelDesb = r.desbMax<=10 ? ["ok","Aceptable"] : r.desbMax<=20 ? ["warn","Elevado"] : ["bad","Crítico"];
+    const filasFase = I.map((i,k)=>`<tr><td>${s.fases===1?"Fase":"L"+(k+1)}</td><td>${f1(i)} A</td><td>${f1(r.desb[k])} %</td></tr>`).join("");
+
+    // texto de tensiones usadas
+    let vTxt;
+    if(sis==="bi" && carga==="ll") vTxt = `V<sub>L1-L2</sub> = ${f1(r.vll)} V${Vm[2]===null?" (nominal)":" (medida)"}`;
+    else if(sis==="tri3") vTxt = `V<sub>línea</sub> prom = ${f1(r.vll)} V`;
+    else vTxt = r.vUsed.map((v,k)=>`${s.vlabels[k]}: ${f1(v)} V`).join(" · ") + (r.vll && sis!=="mono" ? ` · V<sub>entre fases</sub> ≈ ${f1(r.vll)} V` : "");
+    const formula = (sis==="bi" && carga==="ll") ? "S = V<sub>L1-L2</sub> · I<sub>prom</sub>" :
+                    sis==="tri3" ? "S = √3 · V<sub>línea</sub> · I<sub>prom</sub>" : "S = Σ (V<sub>fase-neutro</sub> · I<sub>fase</sub>)";
+
+    const nivelV = r.desbV===null ? null : (r.desbV<=2 ? ["ok","Aceptable"] : r.desbV<=5 ? ["warn","Elevado"] : ["bad","Crítico"]);
+
+    $("res").innerHTML = `
+    <div class="card">
+      <h2>Potencia</h2>
+      <div class="big">
+        <div><b>${f2(r.P/1000)}</b><span>kW (potencia activa)</span></div>
+        <div><b>${Math.round(r.P).toLocaleString("es-VE")}</b><span>W</span></div>
+        <div><b>${f2(r.S/1000)}</b><span>kVA (aparente)</span></div>
+        <div><b>${f2(r.Q/1000)}</b><span>kVAR (reactiva est.)</span></div>
+      </div>
+      <p class="small">${formula}; P = S · cos φ (cos φ = ${f2(fp)}). Tensiones usadas → ${vTxt}. ${r.hayVm ? "" : "Todas son nominales (no ingresaste mediciones)."}</p>
+    </div>
+
+    ${s.fases>1 ? `
+    <div class="card">
+      <h2>Balance de corrientes <span class="tag ${nivelDesb[0]}">${nivelDesb[1]}</span></h2>
+      <table><tr><th></th><th>Corriente</th><th>Desviación vs. promedio</th></tr>${filasFase}
+      <tr><td><b>Promedio</b></td><td><b>${f1(r.prom)} A</b></td><td><b>Máx ${f1(r.desbMax)} %</b></td></tr></table>
+      <p class="small">Desbalance = máx. |I − I<sub>prom</sub>| / I<sub>prom</sub>. Referencia práctica: ≤10 % aceptable, 10–20 % elevado, &gt;20 % crítico.</p>
+      ${nivelV ? `<div class="msg ${nivelV[0]}">Desbalance de tensión: ${f1(r.desbV)} % (${nivelV[1]}). Referencia práctica: ≤2 % aceptable, 2–5 % elevado, &gt;5 % crítico.</div>` : ""}
+    </div>` : ""}
+
+    <div class="card">
+      <h2>Análisis de neutro</h2>
+      <table>
+        <tr><td>Neutro esperado (carga lineal)</td><td>${s.neutro ? f1(r.inCalc)+" A" : "0 A"}</td></tr>
+        <tr><td>Neutro medido</td><td>${In===null ? "—" : f1(In)+" A"}</td></tr>
+        ${In!==null ? `<tr><td>Diferencia</td><td>${f1(In-r.inCalc)} A</td></tr>`:""}
+      </table>
+      ${In===null ? `<div class="msg warn">Ingrese la corriente de neutro medida para evaluar fugas o armónicos.</div>` :
+        diag.map(d=>`<div class="msg ${d.n}">${d.t}</div>`).join("")}
+      <p class="small">El análisis de neutro es un indicio, no un diagnóstico: confirme con analizador de armónicos y pruebas de aislamiento.</p>
+    </div>`;
+    $("res").scrollIntoView({behavior:"smooth"});
+  };
+}
+
+/* =====================================================
+   MICRO-APP 2: SELECCIÓN DE CONDUCTORES (CEN / NTF 200)
+   Tabla 310-16 (0–2000 V, ≤3 conductores portadores, 30 °C),
+   factores de temperatura y agrupamiento, 125 % cargas continuas,
+   terminales 110-14(C), protección 240.4/240.6, tierra 250-122,
+   caída de tensión con R y X (Tabla 9, canalización PVC).
+   ===================================================== */
+const CAL = ["14","12","10","8","6","4","3","2","1","1/0","2/0","3/0","4/0","250","300","350","400","500","600","750","1000"];
+const MM2 = [2.08,3.31,5.26,8.37,13.3,21.2,26.7,33.6,42.4,53.5,67.4,85.0,107,127,152,177,203,253,304,380,507];
+// Ampacidad [60 °C, 75 °C, 90 °C]
+const AMP_CU = [[20,20,25],[25,25,30],[30,35,40],[40,50,55],[55,65,75],[70,85,95],[85,100,110],[95,115,130],[110,130,150],
+  [125,150,170],[145,175,195],[165,200,225],[195,230,260],[215,255,290],[240,285,320],[260,310,350],[280,335,380],
+  [320,380,430],[350,420,475],[400,475,535],[455,545,615]];
+const AMP_AL = [null,[20,20,25],[25,30,35],[30,40,45],[40,50,60],[55,65,75],[65,75,85],[75,90,100],[85,100,115],
+  [100,120,135],[115,135,150],[130,155,175],[150,180,205],[170,205,230],[190,230,255],[210,250,280],[225,270,305],
+  [260,310,350],[285,340,385],[320,385,435],[375,445,500]];
+// Resistencia y reactancia (Ω/km), canalización PVC
+const R_CU = [10.2,6.6,3.9,2.56,1.61,1.02,0.82,0.62,0.49,0.39,0.33,0.253,0.203,0.171,0.144,0.125,0.108,0.089,0.075,0.062,0.049];
+const R_AL = [null,10.5,6.6,4.3,2.66,1.67,1.35,1.05,0.82,0.69,0.52,0.43,0.33,0.282,0.236,0.202,0.177,0.141,0.118,0.095,0.075];
+const XL   = [0.190,0.177,0.164,0.171,0.167,0.157,0.154,0.148,0.151,0.144,0.141,0.138,0.135,0.135,0.135,0.131,0.131,0.128,0.128,0.125,0.121];
+// Límite de protección para conductores pequeños (240.4(D))
+const CAP_CU = {"14":15,"12":20,"10":30}, CAP_AL = {"12":15,"10":25};
+const OCPD = [15,20,25,30,35,40,45,50,60,70,80,90,100,110,125,150,175,200,225,250,300,350,400,450,500,600,700,800,1000,1200,1600,2000];
+// Tierra de equipos, cobre (Tabla 250-122): [máx. protección, calibre]
+const TIERRA_CU = [[15,"14"],[20,"12"],[60,"10"],[100,"8"],[200,"6"],[300,"4"],[400,"3"],[500,"2"],[600,"1"],[800,"1/0"],[1000,"2/0"],[1200,"3/0"],[1600,"4/0"],[2000,"250"]];
+const IDX_1_0 = CAL.indexOf("1/0");
+const calLabel = i => CAL[i] + (i>=CAL.indexOf("250") ? " kcmil" : " AWG");
+const stdUp = x => { const v = OCPD.find(b => b >= x-1e-9); return v===undefined ? null : v; };
+const stdAbove = x => { const v = OCPD.find(b => b > x+1e-9); return v===undefined ? null : v; };
+
+function ftemp(T, c){            // c: 0=60 °C, 1=75 °C, 2=90 °C (base 30 °C)
+  const rows = [[-99,10,1.29,1.20,1.15],[11,15,1.22,1.15,1.12],[16,20,1.15,1.11,1.08],[21,25,1.08,1.05,1.04],
+    [26,30,1,1,1],[31,35,.91,.94,.96],[36,40,.82,.88,.91],[41,45,.71,.82,.87],[46,50,.58,.75,.82],
+    [51,55,.41,.67,.76],[56,60,0,.58,.71],[61,70,0,.33,.58],[71,80,0,0,.41]];
+  const t = Math.ceil(T);
+  const r = rows.find(r => t>=r[0] && t<=r[1]);
+  return r ? r[2+c] : 0;
+}
+function fgrup(n){ return n<=3?1 : n<=6?0.8 : n<=9?0.7 : n<=20?0.5 : n<=30?0.45 : n<=40?0.4 : 0.35; }
+
+/*
+  p: Ia (A, con 125 %), Ib (A, para ampacidad corregida), mat, tIns, tTerm, Tamb, carriers,
+     L (m, un solo sentido), cosf, k (2 ó √3), Vbase, vdMax (%), minIdx, allowPar
+*/
+function seleccionarConductor(p){
+  const ci = {60:0,75:1,90:2};
+  const cIns = ci[p.tIns], cTerm = ci[p.tTerm], cEff = Math.min(cIns,cTerm);
+  const tab = p.mat==="cu" ? AMP_CU : AMP_AL, R = p.mat==="cu" ? R_CU : R_AL;
+  const caps = p.mat==="cu" ? CAP_CU : CAP_AL;
+  const ftv = ftemp(p.Tamb, cIns), fg = fgrup(p.carriers);
+  const sinf = Math.sqrt(Math.max(0,1-p.cosf*p.cosf));
+  const bmin = stdUp(p.Ia);
+
+  const evalSize = (i,n) => {
+    const a = tab[i]; if(!a) return null;
+    const ampTerm = a[cEff], adj = a[cIns]*ftv*fg;
+    const Iz = n*Math.min(adj, ampTerm);
+    const okA = ampTerm >= p.Ia/n - 1e-9;           // sin correcciones, a la temperatura de terminales
+    const okB = adj >= p.Ib/n - 1e-9;               // con correcciones por temperatura y agrupamiento
+    let okBrk = bmin!==null && (bmin <= Iz+1e-9 || (bmin===stdAbove(Iz) && bmin<=800));
+    const cap = caps[CAL[i]]; if(cap && bmin!==null && bmin>cap) okBrk = false;
+    const dv = p.k*(p.Ib/n)*p.L*(R[i]*p.cosf + XL[i]*sinf)/1000;
+    const dvp = dv/p.Vbase*100;
+    return {i,n,okA,okB,okBrk,ampOk:okA&&okB&&okBrk,dv,dvp,dropOk:dvp<=p.vdMax+1e-9,adj,Iz,ampTerm};
+  };
+
+  for(let n=1; n<=(p.allowPar?6:1); n++){
+    let iAmp=-1, iDrop=-1, hit=null;
+    for(let i=p.minIdx; i<CAL.length; i++){
+      if(n>1 && i<IDX_1_0) continue;                 // paralelo solo desde 1/0 (310-4)
+      const e = evalSize(i,n); if(!e) continue;
+      if(iAmp<0 && e.ampOk) iAmp = i;
+      if(iDrop<0 && e.dropOk) iDrop = i;
+      if(e.ampOk && e.dropOk){ hit = e; break; }
+    }
+    if(hit) return {...hit, iAmp, iDrop, ftv, fg, bmin, limita: (iAmp>=iDrop ? "ampacidad / protección" : "caída de tensión")};
+  }
+  return null;
+}
+
+function renderConductor(){
+  app.innerHTML = `
+  <div class="card">
+    <label>Tipo de acometida</label>
+    <select id="sis">${Object.entries(SISTEMAS).map(([k,s])=>`<option value="${k}" ${k==="tri4"?"selected":""}>${s.nombre}</option>`).join("")}</select>
+    <div id="wcarga" class="hide">
+      <label>Tipo de carga predominante (bifásico)</label>
+      <select id="carga"><option value="ln">Cargas a 120 V (fase-neutro)</option><option value="ll">Cargas a 208 V (entre fases)</option></select>
+    </div>
+    <div class="row">
+      <div><label id="lblV">Tensión nominal (V)</label><input id="V" inputmode="decimal"></div>
+      <div><label>Factor de potencia</label><input id="fp" inputmode="decimal" value="0,90"></div>
+    </div>
+
+    <label>Carga total del establecimiento / edificio</label>
+    <div class="row">
+      <div><select id="modo"><option value="A">Corriente por fase (A)</option><option value="kW">Potencia (kW)</option><option value="W">Potencia (W)</option><option value="kVA">Potencia (kVA)</option></select></div>
+      <div><input id="val" inputmode="decimal" placeholder="valor"></div>
+    </div>
+    <div class="row">
+      <div><label>Factor de demanda (%)</label><input id="fd" inputmode="decimal" value="100"></div>
+      <div><label>Tipo de carga</label>
+        <select id="tcarga">
+          <option value="nc">No continua (&lt; 3 h)</option>
+          <option value="c">Continua (≥ 3 h) → 125 %</option>
+          <option value="m">Mixta</option>
+          <option value="mot">Motores → 125 % del mayor</option>
+        </select></div>
+    </div>
+    <div id="wfc" class="hide"><label>Porcentaje de la carga que es continua (%)</label><input id="fc" inputmode="decimal" value="50"></div>
+    <div id="wmot" class="hide"><label>Corriente a plena carga del motor mayor (A)</label><input id="imot" inputmode="decimal"></div>
+
+    <hr>
+    <div class="row">
+      <div><label>Longitud (m, un solo sentido)</label><input id="L" inputmode="decimal"></div>
+      <div><label>Caída de tensión máx. (%)</label><input id="vd" inputmode="decimal" value="3"></div>
+    </div>
+    <p class="small">Recomendación del código: 3 % en el circuito (alimentador o ramal) y 5 % total hasta la carga.</p>
+    <div class="row">
+      <div><label>Material</label><select id="mat"><option value="cu">Cobre</option><option value="al">Aluminio</option></select></div>
+      <div><label>Aislamiento</label><select id="tins"><option value="90">90 °C (THHN/THWN-2)</option><option value="75">75 °C (THW/THWN)</option><option value="60">60 °C (TW)</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>Terminales del equipo</label><select id="tterm"><option value="75">75 °C</option><option value="60">60 °C (≤ 100 A sin marca)</option></select></div>
+      <div><label>Temperatura ambiente (°C)</label><input id="tamb" inputmode="decimal" value="30"></div>
+    </div>
+    <div class="row">
+      <div><label>Circuitos en la misma canalización</label><input id="ncirc" inputmode="numeric" value="1"></div>
+      <div><label>Calibre mínimo</label><select id="minc">${CAL.map((c,i)=>`<option value="${i}" ${c==="12"?"selected":""}>${calLabel(i)}</option>`).join("")}</select></div>
+    </div>
+    <label><input type="checkbox" id="nolin" style="width:auto"> Cargas no lineales (el neutro cuenta como conductor portador)</label>
+    <label><input type="checkbox" id="par" style="width:auto" checked> Permitir conductores en paralelo (desde 1/0)</label>
+    <button class="go" id="calc">Seleccionar conductor</button>
+    <p class="small">Tabla 310-16 (hasta 3 conductores portadores en canalización, base 30 °C). En clima cálido (techos, exteriores) use 35–40 °C. Cada juego en paralelo se asume en su propia canalización.</p>
+  </div>
+  <div id="res"></div>`;
+
+  const $ = id => document.getElementById(id);
+  const ajustar = () => {
+    const sis = $("sis").value;
+    $("V").value = SISTEMAS[sis].vdef;
+    $("lblV").textContent = SISTEMAS[sis].etV;
+    $("wcarga").classList.toggle("hide", sis!=="bi");
+    $("res").innerHTML = "";
+  };
+  $("sis").onchange = ajustar; ajustar();
+  $("tcarga").onchange = () => {
+    $("wfc").classList.toggle("hide", $("tcarga").value!=="m");
+    $("wmot").classList.toggle("hide", $("tcarga").value!=="mot");
+  };
+
+  $("calc").onclick = () => {
+    const sis = $("sis").value, s = SISTEMAS[sis];
+    const carga = sis==="bi" ? $("carga").value : "ln";
+    const V = num($("V").value), fp = num($("fp").value), val = num($("val").value);
+    const fd = num($("fd").value), L = num($("L").value), vd = num($("vd").value);
+    const Tamb = num($("tamb").value), ncirc = Math.max(1, Math.round(num($("ncirc").value) || 1));
+    if(!V||V<=0) return alert("Ingrese una tensión nominal válida.");
+    if(!fp||fp<=0||fp>1) return alert("El factor de potencia debe estar entre 0 y 1.");
+    if(!val||val<=0) return alert("Ingrese la carga total.");
+    if(!fd||fd<=0||fd>100) return alert("El factor de demanda debe estar entre 1 y 100 %.");
+    if(L===null||L<0) return alert("Ingrese la longitud en metros.");
+    if(!vd||vd<=0) return alert("Ingrese la caída de tensión máxima permitida.");
+    if(Tamb===null) return alert("Ingrese la temperatura ambiente.");
+
+    // Tensión entre fases y factor de conversión potencia → corriente
+    const vll = sis==="tri3" ? V : (V===120 ? 208 : V*SQ3);
+    const f = sis==="mono" ? V : sis==="bi" ? (carga==="ll" ? vll : 2*V) : SQ3*vll;
+    const modo = $("modo").value;
+    let Iload;
+    if(modo==="A") Iload = val;
+    else if(modo==="kVA") Iload = val*1000/f;
+    else Iload = (modo==="kW" ? val*1000 : val)/(f*fp);
+    Iload *= fd/100;
+
+    // Corriente de diseño según tipo de carga
+    const tc = $("tcarga").value;
+    let Ia = Iload, Ib = Iload, nota = "";
+    if(tc==="c"){ Ia = 1.25*Iload; nota = "Carga continua: el conductor y la protección se dimensionan al 125 %."; }
+    else if(tc==="m"){ const fc = Math.min(100,Math.max(0,num($("fc").value)||0))/100; Ia = Iload*(1+0.25*fc); nota = `Carga mixta (${Math.round(fc*100)} % continua): 100 % de la no continua + 125 % de la continua.`; }
+    else if(tc==="mot"){
+      const im = num($("imot").value);
+      if(!im||im<=0||im>Iload) return alert("Ingrese la corriente del motor mayor (debe ser ≤ la corriente total).");
+      Ia = 1.25*im + (Iload-im); Ib = Ia;
+      nota = "Motores: 125 % del motor mayor + 100 % del resto. La protección de arranque de motores se calcula aparte (Art. 430).";
+    }
+
+    // Conductores portadores
+    const porCirc = sis==="mono" ? 2 : sis==="bi" ? 3 : sis==="tri4" ? ($("nolin").checked ? 4 : 3) : 3;
+    const carriers = porCirc*ncirc;
+    const k = sis==="tri4"||sis==="tri3" ? SQ3 : 2;
+    const Vbase = sis==="mono" ? V : sis==="bi" ? (carga==="ll" ? vll : V) : vll;
+
+    const r = seleccionarConductor({
+      Ia, Ib, mat:$("mat").value, tIns:+$("tins").value, tTerm:+$("tterm").value, Tamb, carriers,
+      L, cosf:fp, k, Vbase, vdMax:vd, minIdx:+$("minc").value, allowPar:$("par").checked
+    });
+
+    if(!r){
+      $("res").innerHTML = `<div class="card"><h2>Sin solución</h2>
+        <div class="msg bad">Con ${f1(Iload)} A y ${f1(L)} m no hay calibre (hasta 1000 kcmil, con o sin paralelo) que cumpla ampacidad, protección y caída de tensión. Divida la carga en varios alimentadores, suba la tensión de distribución o revise los factores (temperatura, agrupamiento).</div></div>`;
+      return;
+    }
+
+    const nF = s.fases, tieneN = s.neutro, n = r.n;
+    const brk = r.bmin;
+    const tierra = (TIERRA_CU.find(t => brk<=t[0]) || TIERRA_CU[TIERRA_CU.length-1])[1];
+    const tierraLab = tierra + (CAL.indexOf(tierra)>=CAL.indexOf("250") ? " kcmil" : " AWG");
+    const mat = $("mat").value==="cu" ? "Cu" : "Al";
+    const dvVolts = r.dv, ok3 = r.dvp<=vd;
+    const msgs = [];
+    msgs.push({n:"ok", t:`Calibre limitado por: ${r.limita}.`});
+    if(n>1) msgs.push({n:"warn", t:`Se requieren ${n} conductores por fase en paralelo (mismo calibre, material, longitud y aislamiento; cada juego en su canalización con su conductor de tierra).`});
+    if(r.fg<1) msgs.push({n:"warn", t:`Agrupamiento: ${carriers} conductores portadores → factor ${r.fg}.`});
+    if(r.ftv<1) msgs.push({n:"warn", t:`Temperatura ambiente ${Tamb} °C → factor ${r.ftv}.`});
+    if(mat==="Al") msgs.push({n:"warn", t:"Aluminio: use terminales y compuesto antioxidante aptos para Al/Cu."});
+    if(tieneN) msgs.push({n:"warn", t:"Neutro calculado del mismo calibre que las fases (recomendado con cargas no lineales o desbalance). Con cargas lineales equilibradas el código permite reducirlo según el Art. 220."});
+    if(nota) msgs.push({n:"warn", t:nota});
+
+    $("res").innerHTML = `
+    <div class="card">
+      <h2>Resultado</h2>
+      <div class="big">
+        <div><b>${n>1?n+"×":""}${calLabel(r.i)}</b><span>${nF} fase${nF>1?"s":""} · ${mat} · ≈ ${MM2[r.i]} mm²</span></div>
+        <div><b>${tieneN ? (n>1?n+"×":"")+calLabel(r.i) : "—"}</b><span>Neutro</span></div>
+        <div><b>${tierraLab}</b><span>Tierra (Cu), uno por canalización</span></div>
+        <div><b>${brk} A</b><span>Interruptor termomagnético</span></div>
+      </div>
+      ${(r.dv!==null) ? "" : ""}
+    </div>
+    <div class="card">
+      <h2>Detalle de cálculo</h2>
+      <table>
+        <tr><td>Corriente de carga por fase</td><td>${f1(Iload)} A</td></tr>
+        <tr><td>Corriente de diseño (con %)</td><td>${f1(Ia)} A</td></tr>
+        <tr><td>Factor de temperatura</td><td>${r.ftv}</td></tr>
+        <tr><td>Factor de agrupamiento (${carriers} portadores)</td><td>${r.fg}</td></tr>
+        <tr><td>Ampacidad corregida por conductor</td><td>${f1(r.adj)} A</td></tr>
+        <tr><td>Ampacidad a la temperatura de terminales</td><td>${f1(r.ampTerm)} A</td></tr>
+        <tr><td>Caída de tensión</td><td>${f2(dvVolts)} V (${f2(r.dvp)} %) <span class="tag ${ok3?"ok":"bad"}">${ok3?"Cumple":"Excede"}</span></td></tr>
+        <tr><td>Calibre mínimo por ampacidad / por caída</td><td>${r.iAmp>=0?calLabel(r.iAmp):"—"} / ${r.iDrop>=0?calLabel(r.iDrop):"—"}</td></tr>
+      </table>
+      ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
+      <p class="small">Criterios: ampacidad sin corregir ≥ corriente de diseño (110-14(C)) y corregida ≥ carga (310-15); protección ≥ corriente de diseño y ≤ ampacidad (240.4, con límite de conductores pequeños); tierra según 250-122 para la protección elegida (si el fase se aumentó por caída de tensión, aumente la tierra proporcionalmente). No incluye canalización, corto circuito ni cargas especiales. Verifique contra la edición vigente de la NTF 200 y el criterio de un ingeniero colegiado.</p>
+    </div>`;
+    $("res").scrollIntoView({behavior:"smooth"});
+  };
+}
+
+/* =====================================================
+   MICRO-APP 3: BREAKER PRINCIPAL DE ACOMETIDA (CEN / NTF 200)
+   - Carga: censo (demanda, 125 % continuas, 25 % del motor mayor) o total directo
+   - Transformador/banco: corriente nominal secundaria y máximo permitido (450.3(B))
+   - Capacidades normalizadas 240.6, mínimo del desconectador 230.79,
+     protección de falla a tierra 230.95, capacidad interruptiva 110-9
+   ===================================================== */
+const AIC_KA = [10,14,18,22,25,35,42,50,65,85,100,150,200];
+
+// Censo: rows = [{val, uni:"W"|"kW"|"kVA", cant, fp, fd (%), cont, mot}]
+function calcularCenso(rows){
+  let S=0, Sa=0, P=0, motMax=0;
+  for(const r of rows){
+    const kwU = r.uni==="kVA" ? r.val*r.fp : r.val*(r.uni==="kW" ? 1 : 0.001);
+    const kvaU = r.uni==="kVA" ? r.val : kwU/r.fp;
+    const Sd = kvaU*r.cant*r.fd/100;
+    S += Sd; P += kwU*r.cant*r.fd/100; Sa += r.cont ? 1.25*Sd : Sd;
+    if(r.mot) motMax = Math.max(motMax, kvaU);
+  }
+  Sa += 0.25*motMax;                  // 125 % del motor mayor (430.24)
+  return {S, Sa, P, motMax};
+}
+
+/*
+  p: sis, V, vll, Iload, Ia (A, con 125 %), tr:{kVA, In, Z}|null, minRating (A)
+*/
+function dimensionarBreakerPrincipal(p){
+  const hasLoad = p.Ia!==null && p.Ia!==undefined;
+  const In = p.tr ? p.tr.In : null;
+  const pct = In===null ? null : (In>=9 ? 1.25 : In>=2 ? 1.67 : 3.0);   // 450.3(B)
+  const maxTr = In===null ? null : stdUp(pct*In);
+  const minTr = In===null ? null : stdUp(In);
+  const base = hasLoad ? p.Ia : In;
+  const rec = stdUp(Math.max(base, p.minRating));
+  const vln = p.sis==="tri3" ? p.vll/SQ3 : p.V;
+  const vmax = p.sis==="mono" ? p.V : p.vll;
+  const vrat = [120,240,480,600,1000].find(v => v >= vmax-1e-9) || null;
+  const isc = (p.tr && p.tr.Z>0) ? In/(p.tr.Z/100) : null;
+  const aic = isc===null ? null : (AIC_KA.find(k => k*1000 >= isc) || null);
+  const gfp = rec!==null && rec>=1000 && p.sis==="tri4" && vln>150;
+  const gfpNA = rec!==null && rec>=1000 && !gfp;
+  const tipo = rec===null ? "Interruptor de potencia / dividir la acometida" :
+               rec<=100 ? "Termomagnético (riel o caja moldeada)" :
+               rec<800 ? "Caja moldeada (MCCB) termomagnético" :
+               rec<=1600 ? "Caja moldeada o de potencia con disparo electrónico ajustable" :
+                           "Interruptor de potencia (ACB) con disparo electrónico";
+  const util = (p.tr && p.Iload!=null) ? p.Iload/In*100 : null;
+  return {rec, hasLoad, In, pct, maxTr, minTr, vrat, isc, aic, gfp, gfpNA, tipo, util,
+          excedeTr: (maxTr!==null && rec!==null && rec>maxTr),
+          sobrecarga: (p.tr && p.Iload!=null && p.Iload>In*1.0001)};
+}
+
+function renderBreaker(){
+  app.innerHTML = `
+  <div class="card">
+    <label>Tipo de acometida</label>
+    <select id="sis">${Object.entries(SISTEMAS).map(([k,s])=>`<option value="${k}" ${k==="tri4"?"selected":""}>${s.nombre}</option>`).join("")}</select>
+    <div id="wcarga" class="hide">
+      <label>Tipo de carga predominante (bifásico)</label>
+      <select id="carga"><option value="ln">Cargas a 120 V (fase-neutro)</option><option value="ll">Cargas a 208 V (entre fases)</option></select>
+    </div>
+    <div class="row">
+      <div><label id="lblV">Tensión nominal (V)</label><input id="V" inputmode="decimal"></div>
+      <div><label>Uso de la edificación</label><select id="uso"><option value="otro">Comercial / industrial / multifamiliar (mín. 60 A)</option><option value="viv">Vivienda unifamiliar (mín. 100 A)</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>Capacidad del medidor directo (A)</label><input id="lim" inputmode="decimal"></div>
+      <div><label>Reserva de seguridad (%)</label><input id="rsv" inputmode="decimal" value="20"></div>
+    </div>
+    <p class="small">Capacidad del medidor: 40 A monofásico, 100 A bifásico, 120 A trifásico. Se deja una reserva del 20 %, así que el consumo utilizable es 32 / 80 / 96 A. Por encima corresponde medición indirecta (con TC). Confirme con la distribuidora.</p>
+  </div>
+
+  <div class="card">
+    <h2>Carga instalada</h2>
+    <label>Método</label>
+    <select id="metodo">
+      <option value="censo">Censo de carga (tabla de equipos)</option>
+      <option value="directo">Total directo (A, kW o kVA)</option>
+      <option value="ninguno">Sin carga: solo por transformador/banco</option>
+    </select>
+
+    <div id="bcenso">
+      <div id="filas"></div>
+      <button id="addRow" style="margin-top:8px;padding:10px 14px;font-size:15px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--txt);cursor:pointer">+ Agregar equipo</button>
+      <p class="small">Potencia por unidad. Marque «Continua» para cargas de 3 h o más (se calculan al 125 %) y «Motor» para aplicar 25 % adicional al motor mayor.</p>
+    </div>
+
+    <div id="bdirecto" class="hide">
+      <div class="row">
+        <div><label>Dato</label><select id="modo"><option value="A">Corriente por fase (A)</option><option value="kW">Potencia (kW)</option><option value="W">Potencia (W)</option><option value="kVA">Potencia (kVA)</option></select></div>
+        <div><label>Valor</label><input id="val" inputmode="decimal"></div>
+      </div>
+      <div class="row3">
+        <div><label>cos φ</label><input id="fp" inputmode="decimal" value="0,90"></div>
+        <div><label>F. demanda (%)</label><input id="fd" inputmode="decimal" value="100"></div>
+        <div><label>% continuo</label><input id="fc" inputmode="decimal" value="100"></div>
+      </div>
+      <p class="small">% continuo: parte de la carga que opera 3 h o más (125 %). 100 % es conservador.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Transformador o banco (opcional)</h2>
+    <label>Configuración</label>
+    <select id="ttipo">
+      <option value="ninguno">Sin transformador (acometida de la red)</option>
+      <option value="tri">Transformador trifásico</option>
+      <option value="banco3">Banco de 3 transformadores monofásicos</option>
+      <option value="mono">Transformador monofásico</option>
+    </select>
+    <div id="btr" class="hide">
+      <div class="row">
+        <div><label id="lblkva">Capacidad (kVA)</label><input id="tkva" inputmode="decimal"></div>
+        <div><label>Impedancia Z (%)</label><input id="tz" inputmode="decimal" value="4"></div>
+      </div>
+      <p class="small">La impedancia está en la placa del transformador; 4 % es un valor típico. Con ella se estima la corriente de cortocircuito en bornes secundarios (barra infinita, conservador).</p>
+    </div>
+  </div>
+  <button class="go" id="calc">Calcular breaker principal</button>
+  <div id="res" style="margin-top:12px"></div>`;
+
+  const $ = id => document.getElementById(id);
+  const filas = $("filas");
+  function addRow(){
+    const d = document.createElement("div");
+    d.className = "card"; d.style.cssText = "margin:8px 0;padding:10px";
+    d.innerHTML = `
+      <input class="r-nom" placeholder="Descripción (ej. aires acondicionados)">
+      <div class="row3">
+        <div><span class="small">Potencia</span><input class="r-val" inputmode="decimal"></div>
+        <div><span class="small">Unidad</span><select class="r-uni"><option>W</option><option>kW</option><option>kVA</option></select></div>
+        <div><span class="small">Cantidad</span><input class="r-cant" inputmode="numeric" value="1"></div>
+      </div>
+      <div class="row3">
+        <div><span class="small">cos φ</span><input class="r-fp" inputmode="decimal" value="0,90"></div>
+        <div><span class="small">F. demanda %</span><input class="r-fd" inputmode="decimal" value="100"></div>
+        <div><span class="small">&nbsp;</span><button class="r-del" style="width:100%;padding:12px;font-size:14px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--bad);cursor:pointer">Quitar</button></div>
+      </div>
+      <label style="display:inline-block;margin-right:16px"><input type="checkbox" class="r-cont" style="width:auto"> Continua (≥ 3 h)</label>
+      <label style="display:inline-block"><input type="checkbox" class="r-mot" style="width:auto"> Motor</label>`;
+    d.querySelector(".r-del").onclick = () => d.remove();
+    filas.appendChild(d);
+  }
+  addRow();
+  $("addRow").onclick = addRow;
+
+  const ajustar = () => {
+    const sis = $("sis").value;
+    $("V").value = SISTEMAS[sis].vdef;
+    $("lblV").textContent = SISTEMAS[sis].etV;
+    $("wcarga").classList.toggle("hide", sis!=="bi");
+    $("res").innerHTML = "";
+  };
+  $("sis").onchange = ajustar; ajustar();
+  const limDef = () => { const s = $("sis").value; $("lim").value = s==="mono" ? 40 : s==="bi" ? 100 : 120; $("rsv").value = 20; };
+  limDef(); $("sis").addEventListener("change", limDef);
+  $("metodo").onchange = () => {
+    const m = $("metodo").value;
+    $("bcenso").classList.toggle("hide", m!=="censo");
+    $("bdirecto").classList.toggle("hide", m!=="directo");
+  };
+  $("ttipo").onchange = () => {
+    const t = $("ttipo").value;
+    $("btr").classList.toggle("hide", t==="ninguno");
+    $("lblkva").textContent = t==="banco3" ? "Capacidad de cada transformador (kVA)" : "Capacidad (kVA)";
+  };
+
+  $("calc").onclick = () => {
+    const sis = $("sis").value, s = SISTEMAS[sis];
+    const carga = sis==="bi" ? $("carga").value : "ln";
+    const V = num($("V").value);
+    if(!V||V<=0) return alert("Ingrese una tensión nominal válida.");
+    const vll = sis==="tri3" ? V : (V===120 ? 208 : V*SQ3);
+    const f = sis==="mono" ? V : sis==="bi" ? (carga==="ll" ? vll : 2*V) : SQ3*vll;   // VA por amperio por fase
+    const minRating = $("uso").value==="viv" ? 100 : 60;
+    const capM = num($("lim").value) || (sis==="mono" ? 40 : sis==="bi" ? 100 : 120);
+    const rsvIn = num($("rsv").value);
+    const rsv = (rsvIn===null || rsvIn<0 || rsvIn>90) ? 20 : rsvIn;
+    const lim = capM*(1-rsv/100);                     // consumo utilizable del medidor directo
+
+    // ---- Carga ----
+    const metodo = $("metodo").value;
+    let Iload=null, Ia=null, S=null, P=null, extra="";
+    if(metodo==="censo"){
+      const rows = [];
+      for(const d of filas.children){
+        const val = num(d.querySelector(".r-val").value);
+        if(val===null || val<=0) continue;
+        const fp = num(d.querySelector(".r-fp").value), fd = num(d.querySelector(".r-fd").value);
+        const cant = Math.max(1, Math.round(num(d.querySelector(".r-cant").value)||1));
+        if(!fp||fp<=0||fp>1) return alert("El cos φ de cada equipo debe estar entre 0 y 1.");
+        if(!fd||fd<=0||fd>100) return alert("El factor de demanda de cada equipo debe estar entre 1 y 100 %.");
+        rows.push({val, uni:d.querySelector(".r-uni").value, cant, fp, fd,
+                   cont:d.querySelector(".r-cont").checked, mot:d.querySelector(".r-mot").checked});
+      }
+      if(!rows.length) return alert("Ingrese al menos un equipo en el censo de carga.");
+      const c = calcularCenso(rows);
+      S = c.S; P = c.P;
+      Iload = c.S*1000/f; Ia = c.Sa*1000/f;
+      extra = `Censo de ${rows.length} renglón(es): demanda ${f2(c.S)} kVA / ${f2(c.P)} kW; con 125 % de continuas y 25 % del motor mayor: ${f2(c.Sa)} kVA.`;
+    } else if(metodo==="directo"){
+      const val = num($("val").value), fp = num($("fp").value), fd = num($("fd").value), fc = num($("fc").value);
+      if(!val||val<=0) return alert("Ingrese el valor de la carga.");
+      if(!fp||fp<=0||fp>1) return alert("El factor de potencia debe estar entre 0 y 1.");
+      if(!fd||fd<=0||fd>100) return alert("El factor de demanda debe estar entre 1 y 100 %.");
+      if(fc===null||fc<0||fc>100) return alert("El porcentaje continuo debe estar entre 0 y 100.");
+      const modo = $("modo").value;
+      if(modo==="A") Iload = val*fd/100;
+      else { const kva = modo==="kVA" ? val : (modo==="kW" ? val : val/1000)/fp; Iload = kva*fd/100*1000/f; }
+      Ia = Iload*(1+0.25*fc/100);
+      S = Iload*f/1000; P = S*fp;
+    }
+
+    // ---- Transformador / banco ----
+    let tr = null;
+    const tt = $("ttipo").value;
+    if(tt!=="ninguno"){
+      const kva = num($("tkva").value), Z = num($("tz").value);
+      if(!kva||kva<=0) return alert("Ingrese la capacidad del transformador en kVA.");
+      if(Z===null||Z<0) return alert("Ingrese la impedancia del transformador (%).");
+      const kvaTot = tt==="banco3" ? 3*kva : kva;
+      const In = tt==="mono" ? kvaTot*1000/V : kvaTot*1000/(SQ3*vll);
+      tr = {kVA:kvaTot, In, Z, tipo:tt};
+    }
+    if(Ia===null && !tr) return alert("Ingrese la carga o un transformador/banco para dimensionar el breaker.");
+
+    const r = dimensionarBreakerPrincipal({sis, V, vll, Iload, Ia, tr, minRating});
+    if(r.rec===null){
+      $("res").innerHTML = `<div class="card"><h2>Fuera de rango</h2><div class="msg bad">La corriente de diseño supera los 2.000 A normalizados. Divida la acometida en varios desconectadores (hasta 6, 230.71) o use interruptores de potencia dedicados.</div></div>`;
+      return;
+    }
+
+    const polos = sis==="mono" ? "1 (o 2 si es 120/240 V)" : sis==="bi" ? "2" : "3";
+    const msgs = [];
+    if(r.sobrecarga) msgs.push({n:"bad", t:`La carga (${f1(Iload)} A) supera la corriente nominal del transformador (${f1(r.In)} A): sobrecarga del ${f1(r.util-100)} %. Reduzca la carga o aumente la capacidad del transformador/banco.`});
+    if(r.excedeTr) msgs.push({n:"bad", t:`El interruptor que exige la carga (${r.rec} A) es mayor que el máximo permitido por el transformador (${r.maxTr} A, 450.3(B)). El transformador no puede alimentar esta carga de forma segura.`});
+    if(tr && !r.hasLoad) msgs.push({n:"warn", t:`Sin censo de carga: se propone un interruptor igual a la corriente nominal del transformador (${r.minTr} A). Puede subir hasta ${r.maxTr} A (125 % y siguiente valor comercial) si el transformador tiene protección primaria adecuada; en la práctica conviene ajustarlo al censo real.`});
+    if(tr && r.hasLoad && !r.excedeTr && r.rec < r.minTr) msgs.push({n:"ok", t:`Interruptor menor que la capacidad del transformador (${r.minTr} A): correcto, protege según la carga real; el transformador queda con reserva.`});
+    if(r.hasLoad && Ia>Iload+1e-9) msgs.push({n:"warn", t:`Se aplicó el 125 % a cargas continuas${$("metodo").value==="censo"?" y 25 % del motor mayor":""}: corriente de diseño ${f1(Ia)} A frente a ${f1(Iload)} A de carga.`});
+    if((r.hasLoad ? Ia : r.In) < minRating) msgs.push({n:"warn", t:`Se aplicó el mínimo del desconectador de servicio (230.79): ${minRating} A para ${$("uso").value==="viv"?"vivienda unifamiliar":"otras instalaciones"}.`});
+    if(r.gfp) msgs.push({n:"warn", t:"Interruptor ≥ 1000 A en sistema en estrella con más de 150 V a tierra: se exige protección de falla a tierra del equipo (230.95), ajuste ≤ 1200 A y retardo ≤ 1 s para fallas ≥ 3000 A."});
+    if(r.gfpNA) msgs.push({n:"ok", t:"Interruptor ≥ 1000 A: en 208Y/120 V (120 V a tierra) no se exige protección de falla a tierra según 230.95, aunque suele recomendarse."});
+    if(r.rec>=800) msgs.push({n:"warn", t:"A partir de unos 800 A conviene disparo electrónico ajustable (LSI/LSIG). Con disparo ajustable, la capacidad nominal es el ajuste máximo (240.6(B))."});
+    if(extra) msgs.push({n:"ok", t:extra});
+
+    // Tipo de medición según el límite del medidor directo
+    const Imed = Iload!==null ? Iload : (tr ? tr.In : r.rec);
+    const directa = Imed <= lim;
+    const nTC = sis==="mono" ? "1 TC" : sis==="bi" ? "2 TC" : "3 TC";
+    if(directa){
+      msgs.unshift({n:"ok", t:`Medición directa: la corriente de consumo (${f1(Imed)} A) está dentro del límite utilizable del medidor (${f1(lim)} A = ${f1(capM)} A de capacidad menos ${f1(rsv)} % de reserva).`});
+      if(r.rec>capM) msgs.splice(1,0,{n:"warn", t:`El interruptor (${r.rec} A) supera la capacidad del medidor directo (${f1(capM)} A): el medidor podría quedar expuesto a corrientes mayores a su capacidad. Considere medición indirecta o limitar el interruptor.`});
+    } else {
+      const tcS = ctUp(CT_BT, r.rec);
+      msgs.unshift({n:"warn", t:`Medición indirecta: la corriente de consumo (${f1(Imed)} A) supera el límite utilizable del medidor directo (${f1(lim)} A = ${f1(capM)} A de capacidad menos ${f1(rsv)} % de reserva). Use ${nTC} en baja tensión (secundario del transformador)${tcS ? `, por ejemplo ${tcS}:5 para este interruptor` : ""}; si el banco es de su propiedad también puede medirse en media tensión (TC y TP en el primario), según la distribuidora.`});
+    }
+
+    const tablaTr = tr ? `
+      <tr><td>Transformador / banco</td><td>${f1(tr.kVA)} kVA</td></tr>
+      <tr><td>Corriente nominal del secundario</td><td>${f1(tr.In)} A</td></tr>
+      <tr><td>Máx. permitido por el transformador (${Math.round(r.pct*100)} % + siguiente comercial)</td><td>${r.maxTr} A</td></tr>
+      ${r.util!==null ? `<tr><td>Utilización del transformador</td><td>${f1(r.util)} %</td></tr>` : ""}
+      <tr><td>Cortocircuito en bornes (Z = ${f1(tr.Z)} %)</td><td>${r.isc!==null ? f1(r.isc/1000)+" kA" : "—"}</td></tr>` : "";
+
+    $("res").innerHTML = `
+    <div class="card">
+      <h2>Breaker principal</h2>
+      <div class="big">
+        <div><b>${r.rec} A</b><span>Capacidad nominal</span></div>
+        <div><b>${polos.split(" ")[0]} P</b><span>Polos: ${polos}</span></div>
+        <div><b>≥ ${r.vrat||"—"} V</b><span>Tensión nominal del interruptor</span></div>
+        <div><b>${r.aic!==null ? "≥ "+r.aic+" kA" : (r.isc!==null ? "> 200 kA" : "—")}</b><span>Capacidad interruptiva${r.isc===null?" (ingrese transformador)":""}</span></div>
+      </div>
+      <p class="small">Tipo sugerido: ${r.tipo}.</p>
+    </div>
+    <div class="card">
+      <h2>Detalle de cálculo</h2>
+      <table>
+        ${Iload!==null ? `<tr><td>Corriente de carga por fase</td><td>${f1(Iload)} A</td></tr>
+        <tr><td>Corriente de diseño (con 125 %)</td><td>${f1(Ia)} A</td></tr>
+        <tr><td>Carga de demanda</td><td>${f2(S)} kVA · ${f2(P)} kW</td></tr>` : ""}
+        ${tablaTr}
+        <tr><td>Mínimo del desconectador (230.79)</td><td>${minRating} A</td></tr>
+        <tr><td>Capacidad de servicio del interruptor</td><td>${f1(r.rec*f/1000)} kVA</td></tr>
+        <tr><td>Ampacidad mínima de los conductores de acometida</td><td>≥ ${r.rec} A</td></tr>
+      </table>
+      ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
+      <p class="small">Los conductores de acometida deben tener ampacidad ≥ la capacidad del interruptor (240.4); use la microaplicación «Selección de conductor» con ${f1(Ia!==null?Ia:r.In)} A. La capacidad interruptiva debe ser ≥ la corriente de cortocircuito disponible en el punto de instalación (110-9); la estimada es en bornes del transformador y no incluye la contribución de motores ni la impedancia de la red. Para transformadores de más de 600 V en el primario, la protección primaria (450.3(A)) se calcula aparte. Verifique contra la edición vigente de la NTF 200 y el criterio de un ingeniero colegiado, y la normativa de la empresa distribuidora.</p>
+    </div>`;
+    $("res").scrollIntoView({behavior:"smooth"});
+  };
+}
+
+/* =====================================================
+   MICRO-APP 4: TRANSFORMADORES — PROTECCIÓN PRIMARIA Y MEDICIÓN
+   Primario 13,8 kV / 34,5 kV. Criterios: Tabla 450.3(A) (> 1000 V),
+   450.3(B) (secundario ≤ 1000 V), prácticas usuales de distribución
+   (fusibles tipo K/H, TC y TP normalizados).
+   ===================================================== */
+const FUS = [1,2,3,5,6,8,10,12,15,20,25,30,40,50,65,80,100,140,200];   // eslabones H (≤5 A) y K/T
+const fuseUp = x => { const v = FUS.find(f => f >= x-1e-9); return v===undefined ? null : v; };
+const fuseDown = x => { let r = null; for(const v of FUS) if(v <= x+1e-9) r = v; return r; };
+const fuseLabel = v => v<=5 ? v+"H" : v+"K";
+const CT_BT = [50,75,100,150,200,250,300,400,500,600,750,800,1000,1200,1500,2000,2500,3000,4000,5000];
+const CT_MT = [5,10,15,20,25,30,40,50,60,75,100,150,200,300,400,600];
+const ctUp = (arr,x) => { const v = arr.find(c => c >= x-1e-9); return v===undefined ? null : v; };
+
+/*
+  p: tipo ("tri"|"banco3"|"vv"), kva, Vp (V línea primario), Vs (V línea secundario), Z (%),
+     secProt (true = hay interruptor principal en el secundario), aterrado (true = estrella aterrada, 4 hilos)
+*/
+function dimensionarTransformador(p){
+  const kvaTot = p.tipo==="banco3" ? 3*p.kva : p.tipo==="vv" ? SQ3*p.kva : p.kva;
+  const Ip = kvaTot*1000/(SQ3*p.Vp), Is = kvaTot*1000/(SQ3*p.Vs);
+
+  // Fusible primario (> 1000 V)
+  const maxPct = p.secProt ? 3.0 : 2.5;                  // Tabla 450.3(A): 300 % con protección secundaria; 250 % solo primaria
+  const fMax = fuseDown(maxPct*Ip);
+  let fRec = fuseUp(1.5*Ip);                              // práctica: ≥ 1,5 × In para soportar energización
+  const usarInterruptor = fRec===null;
+  let fusExcede = false;
+  if(!usarInterruptor){
+    if(fMax===null){ fRec = FUS[0]; fusExcede = true; }
+    else if(fRec > fMax) fRec = fMax;
+  }
+  const cutoutA = (!usarInterruptor && fRec>100) ? 200 : 100;
+  const brkPct = p.secProt ? (p.Z<=6 ? 6.0 : 4.0) : 2.5;  // interruptor MT: 600 % (Z ≤ 6 %), 400 % (6–10 %)
+
+  // Secundario (≤ 1000 V) — 450.3(B)
+  const sMin = stdUp(Is);
+  const sPct = Is>=9 ? 1.25 : Is>=2 ? 1.67 : 3.0;
+  const sMax = stdUp(sPct*Is);
+
+  // Cortocircuito en bornes (barra infinita)
+  const IscS = p.Z>0 ? Is/(p.Z/100) : null, IscP = p.Z>0 ? Ip/(p.Z/100) : null;
+  const aicS = IscS===null ? null : (AIC_KA.find(k => k*1000 >= IscS) || null);
+
+  // Pararrayos y clase de aislamiento
+  let arr = null, clase = null;
+  if(p.Vp<=15500){ arr = p.aterrado ? {kv:12, mcov:10.2} : {kv:18, mcov:15.3}; clase = "15 kV (BIL 95–110 kV)"; }
+  else if(p.Vp<=38000){ arr = p.aterrado ? {kv:27, mcov:22} : {kv:48, mcov:39}; clase = "38 kV (BIL 150–200 kV)"; }
+
+  // Medición indirecta
+  const ctBT = ctUp(CT_BT, Is), ctMT = ctUp(CT_MT, Ip);
+  const ptLL = p.Vp/120, ptLN = p.Vp/SQ3/120;
+  const ptR = p.aterrado ? ptLN : ptLL;
+  return {kvaTot, Ip, Is, maxPct, fMax, fRec, fusExcede, usarInterruptor, cutoutA, brkPct, sMin, sPct, sMax,
+          IscS, IscP, aicS, arr, clase, ctBT, ctMT, ptLL, ptLN, ptR,
+          utilBT: ctBT ? Is/ctBT*100 : null, utilMT: ctMT ? Ip/ctMT*100 : null,
+          multBT: ctBT ? ctBT/5 : null, multMT: ctMT ? ctMT/5*ptR : null};
+}
+
+function renderTransformador(){
+  app.innerHTML = `
+  <div class="card">
+    <label>Configuración del banco</label>
+    <select id="tipo">
+      <option value="tri">Transformador trifásico</option>
+      <option value="banco3">Banco de 3 transformadores monofásicos</option>
+      <option value="vv">Banco en delta abierta (2 monofásicos)</option>
+    </select>
+    <label id="lblkva">Capacidad (kVA)</label>
+    <input id="kva" inputmode="decimal" placeholder="ej. 150">
+    <div class="row">
+      <div><label>Tensión primaria</label>
+        <select id="vp"><option value="13800">13.800 V (13,8 kV)</option><option value="34500">34.500 V (34,5 kV)</option><option value="otro">Otra…</option></select></div>
+      <div id="wvp" class="hide"><label>Tensión de línea (V)</label><input id="vpo" inputmode="decimal"></div>
+      <div><label>Tensión secundaria de línea (V)</label><input id="vs" inputmode="decimal" value="208"></div>
+    </div>
+    <p class="small">Secundario: 208 V (120/208), 240 V, 380 V, 480 V (277/480)…</p>
+    <div class="row">
+      <div><label>Impedancia Z (%)</label><input id="z" inputmode="decimal" value="4"></div>
+      <div><label>Neutro del primario</label>
+        <select id="neu"><option value="1">Estrella aterrada (4 hilos)</option><option value="0">Delta / aislado (3 hilos)</option></select></div>
+    </div>
+    <label>Protección del secundario</label>
+    <select id="sec">
+      <option value="1">Con interruptor principal en baja tensión</option>
+      <option value="0">Solo protección primaria (ubicación supervisada)</option>
+    </select>
+    <div class="row">
+      <div><label>Capacidad del medidor directo (A)</label><input id="lim" inputmode="decimal" value="120"></div>
+      <div><label>Reserva de seguridad (%)</label><input id="rsv" inputmode="decimal" value="20"></div>
+    </div>
+    <label>Demanda máxima real (A) — opcional</label>
+    <input id="idem" inputmode="decimal" placeholder="si la conoce">
+    <p class="small">Medidor trifásico de 120 A con 20 % de reserva: 96 A utilizables. Sin demanda real se usa la corriente nominal del secundario (conservador).</p>
+    <button class="go" id="calc">Calcular protección y medición</button>
+  </div>
+  <div id="res"></div>`;
+
+  const $ = id => document.getElementById(id);
+  $("tipo").onchange = () => { $("lblkva").textContent = $("tipo").value==="tri" ? "Capacidad (kVA)" : "Capacidad de cada transformador (kVA)"; };
+  $("vp").onchange = () => $("wvp").classList.toggle("hide", $("vp").value!=="otro");
+
+  $("calc").onclick = () => {
+    const kva = num($("kva").value), Vs = num($("vs").value), Z = num($("z").value);
+    const Vp = $("vp").value==="otro" ? num($("vpo").value) : +$("vp").value;
+    if(!kva||kva<=0) return alert("Ingrese la capacidad en kVA.");
+    if(!Vp||Vp<=1000) return alert("Ingrese una tensión primaria mayor de 1000 V.");
+    if(!Vs||Vs<=0) return alert("Ingrese la tensión secundaria.");
+    if(Z===null||Z<0) return alert("Ingrese la impedancia.");
+    const aterrado = $("neu").value==="1", secProt = $("sec").value==="1";
+    const r = dimensionarTransformador({tipo:$("tipo").value, kva, Vp, Vs, Z, secProt, aterrado});
+    const kV = (Vp/1000).toLocaleString("es-VE",{maximumFractionDigits:1});
+    const msgs = [];
+    const capM = num($("lim").value) || 120;
+    const rsvIn = num($("rsv").value);
+    const rsv = (rsvIn===null || rsvIn<0 || rsvIn>90) ? 20 : rsvIn;
+    const lim = capM*(1-rsv/100);                     // consumo utilizable del medidor directo
+    const Idem = num($("idem").value);
+    const Imed = (Idem && Idem>0) ? Idem : r.Is;
+    const directa = Imed <= lim;
+
+    // ---------- Protección primaria ----------
+    let prim;
+    if(r.usarInterruptor){
+      prim = `<div class="big">
+        <div><b>Interruptor MT</b><span>Con relés 50/51 y 50N/51N (el fusible normalizado más grande, 200 A, no alcanza)</span></div>
+        <div><b>${f1(1.25*r.Ip)}–${f1(1.5*r.Ip)} A</b><span>Arranque de 51 (125–150 % de In)</span></div>
+        <div><b>≤ ${f1(r.brkPct*r.Ip)} A</b><span>Máx. permitido (${Math.round(r.brkPct*100)} % de In, Tabla 450.3(A))</span></div>
+        <div><b>&gt; ${f1(12*r.Ip)} A</b><span>Instantáneo 50 por encima de la energización (~12 × In)</span></div></div>`;
+      msgs.push({n:"warn", t:"La corriente primaria exige interruptor de media tensión con relés de sobrecorriente; verifique relaciones de TC de protección y coordinación con la protección de la distribuidora."});
+    } else {
+      prim = `<div class="big">
+        <div><b>${fuseLabel(r.fRec)} · ${r.fRec} A</b><span>Fusible primario recomendado (≈ 1,5 × In)</span></div>
+        <div><b>${r.fMax!==null ? "≤ "+fuseLabel(r.fMax) : "—"}</b><span>Máximo normativo: ${Math.round(r.maxPct*100)} % de In = ${f1(r.maxPct*r.Ip)} A</span></div>
+        <div><b>${r.cutoutA} A</b><span>Seccionador fusible (cortacorriente), un juego por fase</span></div>
+        <div><b>${r.clase||"—"}</b><span>Clase de aislamiento de seccionadores y TC/TP</span></div></div>`;
+      if(r.fusExcede) msgs.push({n:"warn", t:"El fusible normalizado más pequeño excede el límite normativo para esta corriente tan baja. Consulte con la distribuidora/fabricante (eslabones de menor corriente)."});
+      msgs.push({n:"ok", t:`Eslabón tipo ${r.fRec<=5?"H (alta sobrecorriente, para transformadores pequeños)":"K (rápido) o T (lento)"}. Debe resistir la corriente de energización (≈ 8–12 × In durante 0,1 s) y coordinar con el interruptor secundario y las protecciones aguas arriba.`});
+    }
+    if(r.sMin===null) msgs.push({n:"warn", t:"La corriente secundaria supera los 2.000 A: se requieren varios interruptores (hasta 6 desconectadores, 230.71) o interruptores de potencia. Dimensione con la microaplicación «Breaker principal»."});
+    if(Z>10) msgs.push({n:"bad", t:"Z mayor de 10 %: fuera del alcance de la Tabla 450.3(A). Use los valores del fabricante."});
+    if(!secProt) msgs.push({n:"warn", t:"Sin interruptor secundario, el límite baja a 250 % de In y solo es aplicable en ubicación supervisada (personal calificado). Lo usual es instalar interruptor principal en baja tensión."});
+
+    // ---------- Medición ----------
+    const wires = aterrado ? 3 : 2;
+    const ctBTtxt = r.ctBT ? `${r.ctBT}:5` : "> 5000:5 (varios TC o medición en MT)";
+    const ctMTtxt = r.ctMT ? `${r.ctMT}:5` : "> 600:5";
+    if(r.ctMT && r.ctMT<=15) msgs.push({n:"warn", t:`TC de media tensión de baja relación (${ctMTtxt}): verifique su capacidad térmica y dinámica de corto circuito frente a la falla disponible en el punto.`});
+    if(r.utilBT!==null && r.utilBT<40) msgs.push({n:"warn", t:`A plena carga el TC de baja tensión trabaja al ${f1(r.utilBT)} %: si la demanda real es menor, considere una relación menor para mejor exactitud.`});
+
+    $("res").innerHTML = `
+    <div class="card">
+      <h2>Corrientes del banco</h2>
+      <table>
+        <tr><td>Capacidad total</td><td>${f1(r.kvaTot)} kVA</td></tr>
+        <tr><td>Corriente nominal primaria (${kV} kV)</td><td>${f2(r.Ip)} A</td></tr>
+        <tr><td>Corriente nominal secundaria (${f1(Vs)} V)</td><td>${f1(r.Is)} A</td></tr>
+        ${r.IscP!==null ? `<tr><td>Cortocircuito en bornes primario (Z ${f1(Z)} %)</td><td>${f2(r.IscP)} A</td></tr>
+        <tr><td>Cortocircuito en bornes secundario</td><td>${f1(r.IscS/1000)} kA</td></tr>` : ""}
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Protección en primario (${kV} kV)</h2>
+      ${prim}
+      <table style="margin-top:10px">
+        ${r.arr ? `<tr><td>Pararrayos de óxido de zinc (1 por fase)</td><td>${r.arr.kv} kV (MCOV ${r.arr.mcov} kV)</td></tr>` : ""}
+        <tr><td>Puesta a tierra</td><td>Neutro del banco y pararrayos a una malla común</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Protección en secundario</h2>
+      <div class="big">
+        <div><b>${r.sMin!==null ? r.sMin+" A" : "&gt; 2000 A"}</b><span>Interruptor principal mínimo (≥ In secundaria)</span></div>
+        <div><b>${r.sMax!==null ? "≤ "+r.sMax+" A" : "—"}</b><span>Máximo permitido: ${Math.round(r.sPct*100)} % + siguiente comercial (450.3(B))</span></div>
+        <div><b>${r.aicS!==null ? "≥ "+r.aicS+" kA" : (r.IscS!==null ? "&gt; 200 kA" : "—")}</b><span>Capacidad interruptiva mínima en bornes</span></div>
+        <div><b>3 P</b><span>Interruptor tripolar; el neutro no se interrumpe</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Tipo de medición</h2>
+      <div class="msg ${directa?"ok":"warn"}"><b>${directa?"Medición directa":"Medición indirecta"}</b>: corriente ${Idem&&Idem>0?"de demanda":"nominal del secundario"} ${f1(Imed)} A ${directa?"≤":">"} ${f1(lim)} A utilizables (${f1(capM)} A de capacidad menos ${f1(rsv)} % de reserva).</div>
+      <p class="small">${directa
+        ? "Un medidor directo es suficiente; no se requieren TC ni TP. Las tarjetas de medición indirecta siguientes quedan solo como referencia."
+        : "Corresponde medición indirecta con TC: del lado secundario (3 TC en baja tensión) o del primario (TC y TP en media tensión). La distribuidora define el lado según la propiedad del banco y su norma."}${Idem&&Idem>0?" Se usó la demanda real; el medidor debe soportar también la corriente nominal si el banco puede cargarse a plena capacidad.":""}</p>
+    </div>
+
+    <div class="card">
+      <h2>Medición indirecta en baja tensión (${f1(Vs)} V)</h2>
+      <div class="big">
+        <div><b>3 TC · ${ctBTtxt}</b><span>Secundario 5 A, clase de tensión 0,6 kV</span></div>
+        <div><b>×${r.multBT!==null ? r.multBT : "—"}</b><span>Multiplicador del medidor</span></div>
+        <div><b>${r.utilBT!==null ? f1(r.utilBT)+" %" : "—"}</b><span>Carga del TC a plena carga del banco</span></div>
+        <div><b>0,3 – 0,5</b><span>Clase de exactitud (burden 5–15 VA)</span></div>
+      </div>
+      <p class="small">TC en cada fase (no en el neutro). Medidor electrónico de 3 elementos, 4 hilos, tipo TC (forma 9S), con bloque de prueba. Confirme clase y burden exigidos por la distribuidora.</p>
+    </div>
+
+    <div class="card">
+      <h2>Medición en media tensión (${kV} kV)</h2>
+      <div class="big">
+        <div><b>${wires} TC · ${ctMTtxt}</b><span>Secundario 5 A, clase ${r.clase||"—"}</span></div>
+        <div><b>${wires} TP · ${aterrado ? f1(Vp/SQ3)+" : 120 V" : f1(Vp)+" : 120 V"}</b><span>Relación ${f1(r.ptR)} : 1 ${aterrado ? "(fase-neutro, 3 TP)" : "(entre fases, conexión V-V, 2 TP)"}</span></div>
+        <div><b>×${r.multMT!==null ? f1(r.multMT) : "—"}</b><span>Multiplicador total = RTC × RTP</span></div>
+        <div><b>0,3 (W–X)</b><span>Exactitud TP; TC 0,3 / 0,2S</span></div>
+      </div>
+      <p class="small">${aterrado ? "Primario de 4 hilos: 3 TC + 3 TP, medidor de 3 elementos (forma 9S)." : "Primario de 3 hilos: 2 TC + 2 TP en V-V, medidor de 2 elementos (forma 5S/6S)."} TP con fusibles primarios (típicamente 1–2 A). Burden: TC 5–15 VA, TP 25–50 VA. Si usan una unidad de medición combinada (TC+TP), la distribuidora suele exigirla.</p>
+      <table style="margin-top:6px">
+        <tr><td>Relación alterna entre fases (TP)</td><td>${f1(r.ptLL)} : 1</td></tr>
+        <tr><td>Relación fase-neutro (TP)</td><td>${f1(r.ptLN)} : 1</td></tr>
+        <tr><td>Carga del TC a plena carga</td><td>${r.utilMT!==null ? f1(r.utilMT)+" %" : "—"}</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
+      <p class="small">Referencias: Tabla 450.3(A) (transformadores &gt; 1000 V: fusible primario ≤ 300 % de In con protección secundaria, ≤ 250 % si solo primaria en ubicación supervisada; interruptor ≤ 600 % con Z ≤ 6 % y ≤ 400 % con Z de 6 a 10 %) y 450.3(B) (secundario ≤ 1000 V). El fusible recomendado (1,5 × In) y los pararrayos, clases de aislamiento, TC y TP son prácticas usuales de distribución y valores normalizados típicos, no requisitos de la norma: los de TC, TP y medidor los define la empresa distribuidora (p. ej. Corpoelec) en sus normas de medición. Esta herramienta no calcula coordinación de protecciones, falla disponible en la red ni capacidad de ruptura de los seccionadores. Valide con la edición vigente de la NTF 200 y un ingeniero colegiado.</p>
+    </div>`;
+    $("res").scrollIntoView({behavior:"smooth"});
+  };
+}
+
+/* =====================================================
+   MICRO-APP 5: CAÍDA DE TENSIÓN POR CALIBRE Y DISTANCIA
+   ΔV = k · I · L · (R·cosφ + X·senφ) / n   (k = 2 monofásico/bifásico, √3 trifásico)
+   R y X de la Tabla 9 (Ω/km), R corregida por temperatura del conductor.
+   ===================================================== */
+// Reactancia en canalización de acero (Ω/km), valores típicos
+const XL_ST = [0.240,0.223,0.207,0.213,0.210,0.197,0.194,0.187,0.187,0.180,0.177,0.171,0.167,0.171,0.167,0.164,0.161,0.157,0.157,0.157,0.148];
+
+/*
+  p: sis, V, vll, carga ("ln"|"ll"), I (A por fase), mat, idx (calibre), n (conductores en paralelo por fase),
+     L (m, un solo sentido), cosf, Tcond (°C), canal ("pvc"|"acero"), vdMax (%), up (% aguas arriba)
+*/
+function calcularCaida(p){
+  const alfa = p.mat==="cu" ? 0.00393 : 0.00403;
+  const sinf = Math.sqrt(Math.max(0,1-p.cosf*p.cosf));
+  const k = (p.sis==="tri4"||p.sis==="tri3") ? SQ3 : 2;
+  const Vbase = p.sis==="mono" ? p.V : p.sis==="bi" ? (p.carga==="ll" ? p.vll : p.V) : p.vll;
+  const nP = p.sis==="mono" ? 2 : p.sis==="bi" ? (p.carga==="ll" ? 2 : 3) : 3;   // conductores que llevan corriente
+  const zEf = i => {                                   // impedancia efectiva Ω/km
+    const R75 = p.mat==="cu" ? R_CU[i] : R_AL[i];
+    const R = R75*(1+alfa*(p.Tcond-75));
+    const X = (p.canal==="acero" ? XL_ST : XL)[i];
+    return {R, X, Z: R*p.cosf + X*sinf};
+  };
+  const e = zEf(p.idx);
+  const dv = k*p.I*p.L*e.Z/1000/p.n;
+  const dvp = dv/Vbase*100;
+  const ploss = nP*p.I*p.I*(e.R*p.L/1000/p.n)/1000;    // kW
+  const lmax = (p.I>0 && e.Z>0) ? (p.vdMax/100*Vbase)/(k*p.I*e.Z/1000/p.n) : null;
+  // calibre mínimo que cumple el límite a esa distancia
+  let minIdx = -1;
+  const start = p.mat==="cu" ? 0 : 1;
+  for(let i=start; i<CAL.length; i++){
+    if(p.n>1 && i<IDX_1_0) continue;
+    const d = k*p.I*p.L*zEf(i).Z/1000/p.n/Vbase*100;
+    if(d <= p.vdMax+1e-9){ minIdx = i; break; }
+  }
+  const tab = p.mat==="cu" ? AMP_CU : AMP_AL;
+  const amp75 = tab[p.idx] ? tab[p.idx][1]*p.n : null;   // ampacidad 75 °C sin factores (310-16)
+  return {dv, dvp, Vbase, vload: Vbase-dv, ploss, lmax, minIdx, amp75, R:e.R, X:e.X, Z:e.Z, k,
+          total: dvp + (p.up||0)};
+}
+
+function renderCaida(){
+  app.innerHTML = `
+  <div class="card">
+    <label>Tipo de acometida / circuito</label>
+    <select id="sis">${Object.entries(SISTEMAS).map(([k,s])=>`<option value="${k}" ${k==="tri4"?"selected":""}>${s.nombre}</option>`).join("")}</select>
+    <div id="wcarga" class="hide">
+      <label>Tipo de carga (bifásico)</label>
+      <select id="carga"><option value="ln">Cargas a 120 V (fase-neutro)</option><option value="ll">Cargas a 208 V (entre fases)</option></select>
+    </div>
+    <div class="row">
+      <div><label id="lblV">Tensión nominal (V)</label><input id="V" inputmode="decimal"></div>
+      <div><label>Factor de potencia (cos φ)</label><input id="fp" inputmode="decimal" value="0,90"></div>
+    </div>
+
+    <label>Carga</label>
+    <div class="row">
+      <div><select id="modo"><option value="A">Corriente por fase (A)</option><option value="kW">Potencia (kW)</option><option value="kVA">Potencia (kVA)</option></select></div>
+      <div><input id="val" inputmode="decimal" placeholder="valor"></div>
+    </div>
+
+    <hr>
+    <div class="row">
+      <div><label>Longitud (m, un solo sentido)</label><input id="L" inputmode="decimal"></div>
+      <div><label>Caída máxima (%)</label><input id="vd" inputmode="decimal" value="3"></div>
+    </div>
+    <div class="row">
+      <div><label>Material</label><select id="mat"><option value="cu">Cobre</option><option value="al">Aluminio</option></select></div>
+      <div><label>Calibre del conductor</label><select id="cal"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Conductores en paralelo por fase</label><input id="n" inputmode="numeric" value="1"></div>
+      <div><label>Canalización</label><select id="canal"><option value="pvc">PVC / aluminio</option><option value="acero">Acero (metálica)</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>Temp. del conductor (°C)</label><input id="tc" inputmode="decimal" value="75"></div>
+      <div><label>Caída aguas arriba (%)</label><input id="up" inputmode="decimal" value="0"></div>
+    </div>
+    <button class="go" id="calc">Calcular caída de tensión</button>
+    <p class="small">Calcula con la resistencia y la reactancia del conductor (Tabla 9, a 75 °C por defecto, corregida por temperatura) y carga equilibrada. El código recomienda 3 % en el alimentador o ramal y 5 % total desde la fuente hasta la carga: use «Caída aguas arriba» para sumar lo que ya se pierde antes de este tramo.</p>
+  </div>
+  <div id="res"></div>`;
+
+  const $ = id => document.getElementById(id);
+  const fillCal = () => {
+    const prev = $("cal").value;
+    const start = $("mat").value==="cu" ? 0 : 1;
+    $("cal").innerHTML = CAL.map((c,i)=> i<start ? "" : `<option value="${i}">${calLabel(i)} (≈ ${MM2[i]} mm²)</option>`).join("");
+    $("cal").value = (prev!=="" && +prev>=start) ? prev : String(CAL.indexOf("4"));
+  };
+  fillCal();
+  $("mat").onchange = fillCal;
+  const ajustar = () => {
+    const sis = $("sis").value;
+    $("V").value = SISTEMAS[sis].vdef;
+    $("lblV").textContent = SISTEMAS[sis].etV;
+    $("wcarga").classList.toggle("hide", sis!=="bi");
+    $("res").innerHTML = "";
+  };
+  $("sis").onchange = ajustar; ajustar();
+
+  $("calc").onclick = () => {
+    const sis = $("sis").value, s = SISTEMAS[sis];
+    const carga = sis==="bi" ? $("carga").value : "ln";
+    const V = num($("V").value), fp = num($("fp").value), val = num($("val").value);
+    const L = num($("L").value), vd = num($("vd").value), Tc = num($("tc").value);
+    const n = Math.max(1, Math.round(num($("n").value)||1)), up = num($("up").value) || 0;
+    const idx = +$("cal").value, mat = $("mat").value;
+    if(!V||V<=0) return alert("Ingrese una tensión nominal válida.");
+    if(!fp||fp<=0||fp>1) return alert("El factor de potencia debe estar entre 0 y 1.");
+    if(!val||val<=0) return alert("Ingrese la carga.");
+    if(!L||L<=0) return alert("Ingrese la longitud en metros.");
+    if(!vd||vd<=0) return alert("Ingrese la caída máxima permitida.");
+    if(Tc===null) return alert("Ingrese la temperatura del conductor.");
+
+    const vll = sis==="tri3" ? V : (V===120 ? 208 : V*SQ3);
+    const f = sis==="mono" ? V : sis==="bi" ? (carga==="ll" ? vll : 2*V) : SQ3*vll;
+    const modo = $("modo").value;
+    const I = modo==="A" ? val : (modo==="kVA" ? val*1000/f : val*1000/(f*fp));
+
+    const r = calcularCaida({sis, V, vll, carga, I, mat, idx, n, L, cosf:fp, Tcond:Tc, canal:$("canal").value, vdMax:vd, up});
+    const ok = r.dvp <= vd, okTot = r.total <= 5;
+    const msgs = [];
+    msgs.push({n: ok?"ok":"bad", t: ok ? `Cumple: ${f2(r.dvp)} % ≤ ${f1(vd)} % de límite en este tramo.` : `Excede el límite de ${f1(vd)} % en este tramo.`});
+    if(up>0) msgs.push({n: okTot?"ok":"bad", t:`Caída total acumulada: ${f2(r.total)} % (${f2(up)} % aguas arriba + ${f2(r.dvp)} % de este tramo) frente al 5 % recomendado.`});
+    if(!ok && r.minIdx>=0) msgs.push({n:"warn", t:`Para cumplir ${f1(vd)} % a ${f1(L)} m use como mínimo ${n>1?n+"× ":""}${calLabel(r.minIdx)}.`});
+    if(!ok && r.minIdx<0) msgs.push({n:"bad", t:"Ningún calibre hasta 1000 kcmil cumple a esa distancia con ese número de conductores: use más conductores en paralelo, suba la tensión o acerque la fuente."});
+    if(n>1 && idx<IDX_1_0) msgs.push({n:"warn", t:"Los conductores en paralelo solo se permiten desde 1/0 AWG."});
+    if(r.amp75!==null && I>r.amp75) msgs.push({n:"bad", t:`La corriente (${f1(I)} A) supera la ampacidad del conductor a 75 °C (${f1(r.amp75)} A, sin factores de corrección). Verifique con «Selección de conductor».`});
+    else if(r.amp75!==null) msgs.push({n:"ok", t:`Ampacidad del conductor a 75 °C (310-16, sin factores): ${f1(r.amp75)} A frente a ${f1(I)} A de carga. La caída de tensión no sustituye la verificación de ampacidad y protección.`});
+    if($("canal").value==="acero") msgs.push({n:"warn", t:"Canalización de acero: se usó la reactancia típica; la resistencia a.c. puede ser algo mayor en calibres grandes."});
+
+    $("res").innerHTML = `
+    <div class="card">
+      <h2>Resultado <span class="tag ${ok?"ok":"bad"}">${ok?"Cumple":"Excede"}</span></h2>
+      <div class="big">
+        <div><b>${f2(r.dv)} V</b><span>Caída de tensión</span></div>
+        <div><b>${f2(r.dvp)} %</b><span>Sobre ${f1(r.Vbase)} V${sis==="tri4"||sis==="tri3"||(sis==="bi"&&carga==="ll")?" (entre fases)":" (fase-neutro)"}</span></div>
+        <div><b>${f1(r.vload)} V</b><span>Tensión en la carga</span></div>
+        <div><b>${f2(r.ploss)} kW</b><span>Pérdidas en el conductor</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Detalle</h2>
+      <table>
+        <tr><td>Corriente de carga por fase</td><td>${f1(I)} A</td></tr>
+        <tr><td>Conductor</td><td>${n>1?n+"× ":""}${calLabel(idx)} ${mat==="cu"?"Cu":"Al"} (≈ ${MM2[idx]} mm²)</td></tr>
+        <tr><td>Resistencia a ${f1(Tc)} °C</td><td>${r.R.toFixed(3)} Ω/km</td></tr>
+        <tr><td>Reactancia</td><td>${r.X.toFixed(3)} Ω/km</td></tr>
+        <tr><td>Impedancia efectiva (R·cosφ + X·senφ)</td><td>${r.Z.toFixed(3)} Ω/km</td></tr>
+        <tr><td>Longitud máxima con este calibre (${f1(vd)} %)</td><td>${r.lmax!==null ? f1(r.lmax)+" m" : "—"}</td></tr>
+        <tr><td>Calibre mínimo solo por caída de tensión a ${f1(L)} m (sin ampacidad)</td><td>${r.minIdx>=0 ? (n>1?n+"× ":"")+calLabel(r.minIdx) : "—"}</td></tr>
+      </table>
+      ${msgs.map(m=>`<div class="msg ${m.n}">${m.t}</div>`).join("")}
+      <p class="small">Fórmula: ΔV = k · I · L · (R·cos φ + X·sen φ) / n, con k = 2 en monofásico y bifásico y k = √3 en trifásico, y n conductores en paralelo por fase. Carga equilibrada; el neutro se supone sin caída adicional. Los valores de R y X son los de la Tabla 9 del código (de la familia NEC); verifique con su edición de la NTF 200.</p>
+    </div>`;
+    $("res").scrollIntoView({behavior:"smooth"});
+  };
+}
+
+home();
+try{ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js'); }catch(e){}
+</script>
+</body>
+</html>
