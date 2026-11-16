@@ -3,59 +3,92 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#1d4ed8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <title>Calculos G.E</title>
 <style>
   :root{
-    --bg:#f1f5f9; --card:#ffffff; --txt:#0f172a; --mut:#64748b; --bd:#e2e8f0;
+    --bg:#f3f5f9; --card:#ffffff; --txt:#0f172a; --mut:#475569; --bd:#e2e8f0;
     --pri:#1d4ed8; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
     --okbg:#dcfce7; --warnbg:#fef3c7; --badbg:#fee2e2;
+    --sh:0 6px 20px rgba(15,23,42,.08); --g:linear-gradient(160deg,#1d4ed8,#0ea5a4);
   }
   @media (prefers-color-scheme: dark){
-    :root{--bg:#0b1220; --card:#131c2e; --txt:#e5e7eb; --mut:#94a3b8; --bd:#243049;
+    :root{--bg:#0b1220; --card:#131c2e; --txt:#e5e7eb; --mut:#a3b1c6; --bd:#243049;
       --pri:#60a5fa; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
-      --okbg:#052e16; --warnbg:#422006; --badbg:#450a0a;}
+      --okbg:#052e16; --warnbg:#422006; --badbg:#450a0a; --sh:0 6px 20px rgba(0,0,0,.35);
+      --g:linear-gradient(160deg,#1e3a8a,#0f766e);}
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-  header{padding:14px 16px;background:#0f172a;color:#fff;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
-  header h1{font-size:18px;margin:0;flex:1}
-  header button{background:transparent;border:0;color:#fff;font-size:22px;cursor:pointer;display:none}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:0 0 env(safe-area-inset-bottom)}
+  header{background:var(--g);color:#fff;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;display:flex;align-items:center;gap:12px;
+    position:sticky;top:0;z-index:5;transition:padding .35s ease,border-radius .35s ease;box-shadow:0 2px 14px rgba(15,23,42,.18)}
+  header .logo{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none}
+  header .tx{flex:1;min-width:0}
+  header h1{font-size:20px;font-weight:800;margin:0;line-height:1.2}
+  header #sub{margin:2px 0 0;font-size:13px;opacity:.92;font-weight:500}
+  header button{display:none;width:42px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;align-items:center;justify-content:center;flex:none;transition:transform .15s}
+  header button:active{transform:scale(.92)}
+  body.home header{padding-top:calc(env(safe-area-inset-top) + 28px);padding-bottom:46px;border-radius:0 0 32px 32px;position:relative}
+  body.home header h1{font-size:26px}
+  body.inner #sub{display:none}
+  body.inner header .logo{display:none}
   main{max-width:640px;margin:0 auto;padding:14px 16px 40px}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
-  .tile{display:flex;gap:12px;align-items:center;cursor:pointer}
-  .tile .ic{font-size:28px}
-  .tile h3{margin:0;font-size:16px}
-  .tile p{margin:2px 0 0;color:var(--mut);font-size:13px}
+  body.home main{padding-top:0}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:14px;margin-bottom:12px;box-shadow:0 2px 10px rgba(15,23,42,.05)}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:-30px;position:relative;z-index:6}
+  .tile{display:flex;flex-direction:column;gap:12px;cursor:pointer;min-height:140px;margin:0;box-shadow:var(--sh);border:0;border-radius:20px;padding:16px;
+    transition:transform .18s ease,box-shadow .18s ease}
+  .tile:active{transform:scale(.96)}
+  .tile.wide{grid-column:span 2;flex-direction:row;align-items:center;min-height:0}
+  .tile .ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex:none}
+  .tile h3{margin:0;font-size:16px;font-weight:800}
+  .tile p{margin:2px 0 0;color:var(--mut);font-size:13px;line-height:1.3}
   .tile.off{opacity:.5;cursor:default}
-  label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
-  input,select{width:100%;padding:12px;font-size:17px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--txt)}
+  label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:10px 0 4px}
+  input,select{width:100%;padding:12px;font-size:17px;border-radius:12px;border:1.5px solid var(--bd);background:var(--bg);color:var(--txt);transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px rgba(29,78,216,.18)}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-  button.go{width:100%;margin-top:16px;padding:14px;font-size:17px;font-weight:600;border:0;border-radius:12px;background:var(--pri);color:#fff;cursor:pointer}
+  button.go{width:100%;margin-top:16px;padding:15px;font-size:17px;font-weight:800;border:0;border-radius:16px;background:var(--pri);color:#fff;cursor:pointer;
+    box-shadow:0 6px 16px rgba(29,78,216,.3);transition:transform .15s,box-shadow .15s}
+  button.go:active{transform:scale(.97);box-shadow:0 2px 6px rgba(29,78,216,.3)}
   .big{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .big div{background:var(--bg);border-radius:12px;padding:12px;text-align:center}
-  .big b{display:block;font-size:24px}
+  .big div{background:var(--bg);border-radius:14px;padding:12px;text-align:center}
+  .big b{display:block;font-size:24px;font-weight:800}
   .big span{font-size:12px;color:var(--mut)}
-  h2{font-size:15px;margin:0 0 8px}
+  h2{font-size:15px;font-weight:800;margin:0 0 8px}
   table{width:100%;border-collapse:collapse;font-size:14px}
-  td,th{padding:6px 4px;border-bottom:1px solid var(--bd);text-align:left}
+  td,th{padding:7px 4px;border-bottom:1px solid var(--bd);text-align:left}
   td:last-child,th:last-child{text-align:right}
-  .tag{display:inline-block;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600}
+  .tag{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700}
   .ok{background:var(--okbg);color:var(--ok)} .warn{background:var(--warnbg);color:var(--warn)} .bad{background:var(--badbg);color:var(--bad)}
-  .msg{padding:10px 12px;border-radius:10px;margin-top:8px;font-size:14px;line-height:1.4}
+  .msg{padding:11px 13px;border-radius:14px;margin-top:8px;font-size:14px;line-height:1.4}
   .small{font-size:12px;color:var(--mut);line-height:1.4}
   .hide{display:none}
   hr{border:0;border-top:1px solid var(--bd);margin:14px 0 4px}
+  /* Animaciones */
+  @keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+  #app>*{animation:up .4s ease both}
+  #app>*:nth-child(2){animation-delay:.05s}#app>*:nth-child(3){animation-delay:.1s}
+  #app>*:nth-child(4){animation-delay:.15s}#app>*:nth-child(5){animation-delay:.2s}
+  .grid>.tile{animation:up .45s ease both}
+  .grid>.tile:nth-child(2){animation-delay:.06s}.grid>.tile:nth-child(3){animation-delay:.12s}
+  .grid>.tile:nth-child(4){animation-delay:.18s}.grid>.tile:nth-child(5){animation-delay:.24s}
+  .big div{animation:pop .35s ease both}
+  .big div:nth-child(2){animation-delay:.05s}.big div:nth-child(3){animation-delay:.1s}.big div:nth-child(4){animation-delay:.15s}
+  .msg{animation:up .35s ease both}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <header>
-  <button id="back" aria-label="Volver">←</button>
-  <h1 id="title">⚡ Calculos G.E</h1>
+  <button id="back" aria-label="Volver"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+  <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg></div>
+  <div class="tx"><h1 id="title">Calculos G.E</h1><p id="sub">Cálculos eléctricos para Venezuela</p></div>
 </header>
 <main id="app"></main>
 
@@ -155,6 +188,7 @@ function diagnosticarNeutro({sis, In, inCalc, prom}){
 /* =====================================================
    MICRO-APPS (registro) — agregar nuevas aquí
    ===================================================== */
+const ICONOS = {"potencia": {"bg": "#dbeafe", "fg": "#1d4ed8", "svg": "<path d=\"M4 16a8 8 0 1 1 16 0\"/><path d=\"M12 16l4-5\"/>", "short": "kW, kVA y balance"}, "caida": {"bg": "#ffe4e6", "fg": "#be123c", "svg": "<path d=\"M3 6l6 6 4-4 8 8\"/><path d=\"M21 11v5h-5\"/>", "short": "Según distancia y calibre"}, "conductor": {"bg": "#ccfbf1", "fg": "#0f766e", "svg": "<path d=\"M3 12c3-6 6-6 9 0s6 6 9 0\"/>", "short": "Calibre y protección"}, "proteccion": {"bg": "#fef3c7", "fg": "#b45309", "svg": "<rect x=\"6\" y=\"3\" width=\"12\" height=\"18\" rx=\"2\"/><path d=\"M12 7v6\"/><path d=\"M9 17h6\"/>", "short": "Acometida y medición"}, "transfo": {"bg": "#ede9fe", "fg": "#6d28d9", "svg": "<circle cx=\"9\" cy=\"12\" r=\"5\"/><circle cx=\"15\" cy=\"12\" r=\"5\"/>", "short": "Protección, TC y TP"}};
 const MICROAPPS = [
   { id:"potencia", icon:"🔌", nombre:"Potencia por pinza", desc:"kW, W, kVA, balance y análisis de neutro", activa:true, render: renderPotencia },
   { id:"caida",    icon:"📉", nombre:"Caída de tensión",   desc:"Por calibre y distancia: %, pérdidas, longitud máxima", activa:true, render: renderCaida },
@@ -169,16 +203,21 @@ const back = document.getElementById("back");
 back.onclick = () => home();
 
 function home(){
-  title.textContent = "⚡ Calculos G.E";
+  document.body.className = "home";
+  title.textContent = "Calculos G.E";
   back.style.display = "none";
-  app.innerHTML = MICROAPPS.map(m => `
-    <div class="card tile ${m.activa?"":"off"}" data-id="${m.id}">
-      <div class="ic">${m.icon}</div>
-      <div><h3>${m.nombre}</h3><p>${m.desc}</p></div>
-    </div>`).join("");
+  window.scrollTo(0,0);
+  app.innerHTML = '<div class="grid">' + MICROAPPS.map((m,i) => {
+    const ic = ICONOS[m.id];
+    const wide = i === MICROAPPS.length-1 && MICROAPPS.length % 2 === 1;
+    return `<div class="card tile ${wide?"wide":""} ${m.activa?"":"off"}" data-id="${m.id}" role="button" tabindex="0">
+      <div class="ic" style="background:${ic.bg}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${ic.fg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic.svg}</svg></div>
+      <div><h3>${m.nombre.replace("Breaker principal de acometida","Breaker de acometida").replace("Transformadores: protección y medición","Transformadores")}</h3><p>${ic.short}</p></div>
+    </div>`; }).join("") + "</div>";
   app.querySelectorAll(".tile").forEach(el=>{
     const m = MICROAPPS.find(x=>x.id===el.dataset.id);
-    if(m.activa) el.onclick = () => { title.textContent = m.icon+" "+m.nombre; back.style.display="block"; m.render(); };
+    const open = () => { document.body.className="inner"; title.textContent = m.nombre; back.style.display="flex"; window.scrollTo(0,0); m.render(); };
+    if(m.activa){ el.onclick = open; el.onkeydown = e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); open(); } }; }
   });
 }
 
